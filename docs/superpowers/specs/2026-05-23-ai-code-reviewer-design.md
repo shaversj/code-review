@@ -248,6 +248,16 @@ Guardrails:
 
 ## Data Model
 
+Persistent state uses SQLite in v1. The application should enable WAL mode, foreign keys, and a busy timeout on startup:
+
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
+```
+
+SQLite is acceptable for the single-tenant first version because review state is small and write volume is modest. Worker concurrency should start low, and writes should be short transactions. If the service later needs multiple app instances, high worker concurrency, or richer analytics, migrate this schema to PostgreSQL.
+
 ### ReviewRun
 
 - `id`
@@ -405,7 +415,7 @@ The eval harness should run the full staged pipeline and report:
 
 ## V1 Defaults
 
-- Use PostgreSQL for persistent state.
+- Use SQLite with WAL mode for persistent state.
 - Use Amazon SQS standard queue with a dead-letter queue for asynchronous jobs.
 - Use a small model gateway interface so review stages are model-agnostic from the start.
 - Use temporary-directory sandbox workspaces on a controlled worker host for the first implementation.
