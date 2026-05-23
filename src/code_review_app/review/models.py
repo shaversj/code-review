@@ -21,3 +21,31 @@ class CheckResult:
     timed_out: bool
     duration_ms: int
     output_excerpt: str
+
+
+@dataclass(frozen=True)
+class Lead:
+    file_path: str
+    line: int
+    suspicion: str
+    related_rule_ids: list[str]
+    suggested_context: str
+    status: str = "open"
+
+
+@dataclass(frozen=True)
+class Finding:
+    file_path: str
+    line: int
+    severity: str
+    title: str
+    behavior_at_risk: str
+    evidence: str
+    suggested_action: str
+    confidence: float
+
+
+@dataclass(frozen=True)
+class ReviewPipelineResult:
+    leads: list[Lead]
+    findings: list[Finding]
