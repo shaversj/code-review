@@ -417,7 +417,7 @@ The eval harness should run the full staged pipeline and report:
 
 - Use SQLite with WAL mode for persistent state.
 - Use Amazon SQS standard queue with a dead-letter queue for asynchronous jobs.
-- Use a small model gateway interface so review stages are model-agnostic from the start.
+- Use Anthropic as the initial model provider behind a small model gateway interface.
 - Use temporary-directory sandbox workspaces on a controlled worker host for the first implementation.
 - Run one deep reviewer by default.
 - Add a second deep reviewer only for high-severity leads once the single-reviewer path is working.

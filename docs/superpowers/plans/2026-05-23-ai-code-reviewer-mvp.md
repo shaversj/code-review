@@ -4,9 +4,9 @@
 
 **Goal:** Build the first runnable vertical slice of the single-tenant GitHub App code reviewer.
 
-**Architecture:** A FastAPI webhook verifies GitHub PR events, creates SQLite-backed `ReviewRun` records, and sends SQS messages. A Python worker receives SQS messages, checks out the PR into an ephemeral workspace, runs allowlisted checks, executes a structured review pipeline, and posts guarded PR review comments.
+**Architecture:** A FastAPI webhook verifies GitHub PR events, creates SQLite-backed `ReviewRun` records, and sends SQS messages. A Python worker receives SQS messages, checks out the PR into an ephemeral workspace, runs allowlisted checks, executes a structured review pipeline, and posts guarded PR review comments. The MVP uses a deterministic pipeline first; the model-backed follow-up uses Anthropic behind a narrow model gateway.
 
-**Tech Stack:** Python 3.12, FastAPI, Uvicorn, Pydantic Settings, SQLite, boto3, PyYAML, pytest, httpx, respx.
+**Tech Stack:** Python 3.12, FastAPI, Uvicorn, Pydantic Settings, SQLite, boto3, PyYAML, pytest, httpx, respx. Anthropic is the selected model provider for the first model-backed review stage after the MVP foundation.
 
 ---
 
@@ -1989,7 +1989,7 @@ git commit -m "docs: add local development instructions"
 - Deliberate follow-up after this MVP plan:
   - GitHub App JWT and installation token generation.
   - Persisting check runs, leads, findings, and posted comment IDs.
-  - Real model-backed scout, reviewer, verifier, and reporter stages.
+  - Anthropic-backed scout, reviewer, verifier, and reporter stages behind a `ModelGateway`.
   - SQS visibility extension during long reviews.
   - Dead-letter queue redrive documentation.
   - Inline comment positioning from actual diff hunks.
