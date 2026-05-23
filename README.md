@@ -64,6 +64,7 @@ uv run code-review-worker
 ## Test
 
 ```bash
+./init.sh
 uv run pytest -q
 ```
 

@@ -34,6 +34,7 @@ The intended architecture is staged review:
 
 ```bash
 uv sync --extra dev              # Install local development dependencies
+./init.sh                        # Standard verification path
 uv run pytest -q                 # Run tests
 uv run ruff check .              # Run lint
 docker compose config --quiet    # Validate Docker Compose config
@@ -117,9 +118,7 @@ Before writing code:
 6. Run baseline verification:
 
    ```bash
-   uv run pytest -q
-   uv run ruff check .
-   docker compose config --quiet
+   ./init.sh
    ```
 
 If baseline verification fails, repair that first before adding new scope.
@@ -143,6 +142,7 @@ If baseline verification fails, repair that first before adding new scope.
 - `docker-compose.yml` — Local runtime for API, worker, and LocalStack
 - `Dockerfile` — App image build
 - `.env.example` — Environment variable template
+- `init.sh` — Standard dependency sync and verification path
 - `localstack/init/ready.d/create-sqs.sh` — LocalStack queue initialization
 - `docs/superpowers/specs/2026-05-23-ai-code-reviewer-design.md` — Architecture spec
 - `docs/superpowers/plans/2026-05-23-ai-code-reviewer-mvp.md` — MVP implementation plan
@@ -165,9 +165,7 @@ A change is done only when all relevant items are true:
 Full local verification:
 
 ```bash
-uv run pytest -q
-uv run ruff check .
-docker compose config --quiet
+./init.sh
 ```
 
 For Docker runtime changes, also run:
