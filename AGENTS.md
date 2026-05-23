@@ -62,8 +62,6 @@ See `README.md` for local setup, Docker Compose usage, direct local API/worker c
 - `Dockerfile` — App image build
 - `.env.example` — Environment variable template
 - `localstack/init/ready.d/create-sqs.sh` — LocalStack queue initialization
-- `docs/superpowers/specs/2026-05-23-ai-code-reviewer-design.md` — Detailed design spec
-- `docs/superpowers/plans/2026-05-23-ai-code-reviewer-mvp.md` — MVP implementation plan
 - `tests/` — Regression and contract tests
 
 ## Definition of Done
