@@ -40,31 +40,6 @@ docker compose config --quiet
 
 See `README.md` for local setup, Docker Compose usage, direct local API/worker commands, and local health checks.
 
-## Documentation Lookup
-
-Use the `ctx7` CLI to fetch current documentation whenever the user asks about a library, framework, SDK, API, CLI tool, or cloud service. This includes FastAPI, boto3, AWS SQS, LocalStack, Docker Compose, Terraform, Anthropic, GitHub Apps, uv, pytest, Ruff, and similar tools.
-
-Steps:
-
-1. Resolve library:
-
-   ```bash
-   npx ctx7@latest library <name> "<user's full question>"
-   ```
-
-2. Pick the best match using exact name, relevance, snippet count, source reputation, and benchmark score.
-3. Fetch docs:
-
-   ```bash
-   npx ctx7@latest docs <libraryId> "<user's full question>"
-   ```
-
-4. Answer or implement using the fetched documentation.
-
-Do not use Context7 for refactoring, writing scripts from scratch, debugging business logic, code review, or general programming concepts.
-
-If a Context7 command fails with a quota error, tell the user and suggest `npx ctx7@latest login` or setting `CONTEXT7_API_KEY`.
-
 ## Working Rules
 
 - Keep changes scoped to the requested feature or fix.
