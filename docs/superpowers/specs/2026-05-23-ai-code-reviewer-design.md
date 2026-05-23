@@ -83,7 +83,17 @@ Responsibilities:
 
 ### Job Queue
 
-The queue decouples GitHub webhooks from review execution. A simple first implementation can use Redis with RQ, Celery, or Dramatiq. The queue should support retries, job timeouts, and worker concurrency limits.
+The queue decouples GitHub webhooks from review execution. The v1 implementation uses Amazon SQS with a standard queue and a dead-letter queue. SQS is a good fit because review jobs are durable, coarse-grained tasks that can tolerate at-least-once delivery.
+
+The queue should use:
+
+- Long polling to reduce empty receives.
+- A visibility timeout longer than the expected review job duration.
+- Visibility timeout extension for long-running reviews.
+- A dead-letter queue for jobs that repeatedly fail.
+- Worker-side idempotency keyed by `ReviewRun.id` and `head_sha`.
+
+SQS can deliver a message more than once, so workers must not assume exactly-once execution. Posting comments must remain guarded by the current PR head SHA and finding deduplication.
 
 The queue payload should be small:
 
@@ -246,6 +256,7 @@ Guardrails:
 - `base_sha`
 - `head_sha`
 - `installation_id`
+- `queue_message_id`
 - `status`
 - `started_at`
 - `finished_at`
@@ -395,7 +406,7 @@ The eval harness should run the full staged pipeline and report:
 ## V1 Defaults
 
 - Use PostgreSQL for persistent state.
-- Use Redis Queue for asynchronous jobs.
+- Use Amazon SQS standard queue with a dead-letter queue for asynchronous jobs.
 - Use a small model gateway interface so review stages are model-agnostic from the start.
 - Use temporary-directory sandbox workspaces on a controlled worker host for the first implementation.
 - Run one deep reviewer by default.
