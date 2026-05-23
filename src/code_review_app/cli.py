@@ -9,7 +9,11 @@ from code_review_app.queue.sqs import SqsQueue
 
 def main() -> None:
     settings = get_settings()
-    queue = SqsQueue.from_region(settings.aws_region, settings.sqs_queue_url)
+    queue = SqsQueue.from_region(
+        settings.aws_region,
+        settings.sqs_queue_url,
+        endpoint_url=settings.aws_endpoint_url,
+    )
     while True:
         for message in queue.receive_messages(max_messages=1, wait_time_seconds=20):
             body = json.loads(message["Body"])

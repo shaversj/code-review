@@ -13,7 +13,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or get_settings()
     storage = Storage(resolved.database_path)
     storage.initialize()
-    queue = SqsQueue.from_region(resolved.aws_region, resolved.sqs_queue_url)
+    queue = SqsQueue.from_region(
+        resolved.aws_region,
+        resolved.sqs_queue_url,
+        endpoint_url=resolved.aws_endpoint_url,
+    )
     coordinator = ReviewCoordinator(storage, queue, resolved.allowed_repo_set)
 
     app = FastAPI(title="AI Code Reviewer")

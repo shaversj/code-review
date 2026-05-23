@@ -1,5 +1,7 @@
 import json
 
+import boto3
+
 from code_review_app.queue.sqs import SqsQueue
 
 
@@ -34,3 +36,28 @@ def test_delete_message_uses_receipt_handle() -> None:
     queue.delete_message("receipt")
 
     assert client.deleted == [{"QueueUrl": "https://queue", "ReceiptHandle": "receipt"}]
+
+
+def test_from_region_uses_endpoint_url_for_lazy_client(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    def fake_client(service_name: str, **kwargs):
+        calls.append({"service_name": service_name, **kwargs})
+        return FakeSqsClient()
+
+    monkeypatch.setattr(boto3, "client", fake_client)
+    queue = SqsQueue.from_region(
+        "us-east-1",
+        "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/code-review-jobs",
+        endpoint_url="http://localhost.localstack.cloud:4566",
+    )
+
+    queue.enqueue_review_job({"review_run_id": 1})
+
+    assert calls == [
+        {
+            "service_name": "sqs",
+            "region_name": "us-east-1",
+            "endpoint_url": "http://localhost.localstack.cloud:4566",
+        }
+    ]

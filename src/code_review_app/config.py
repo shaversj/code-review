@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     github_webhook_secret: str
     github_allowed_repos: str
     aws_region: str = "us-east-1"
+    aws_endpoint_url: str | None = None
     sqs_queue_url: str
     sqs_visibility_timeout_seconds: int = Field(default=900, ge=30)
     sandbox_root: Path = Path(".sandboxes")

@@ -7,19 +7,37 @@ import boto3
 
 
 class SqsQueue:
-    def __init__(self, client: Any | None, queue_url: str, region_name: str | None = None) -> None:
+    def __init__(
+        self,
+        client: Any | None,
+        queue_url: str,
+        region_name: str | None = None,
+        endpoint_url: str | None = None,
+    ) -> None:
         self._client = client
         self.queue_url = queue_url
         self.region_name = region_name
+        self.endpoint_url = endpoint_url
 
     @classmethod
-    def from_region(cls, region_name: str, queue_url: str) -> SqsQueue:
-        return cls(client=None, queue_url=queue_url, region_name=region_name)
+    def from_region(
+        cls, region_name: str, queue_url: str, endpoint_url: str | None = None
+    ) -> SqsQueue:
+        return cls(
+            client=None,
+            queue_url=queue_url,
+            region_name=region_name,
+            endpoint_url=endpoint_url,
+        )
 
     @property
     def client(self) -> Any:
         if self._client is None:
-            self._client = boto3.client("sqs", region_name=self.region_name)
+            self._client = boto3.client(
+                "sqs",
+                region_name=self.region_name,
+                endpoint_url=self.endpoint_url,
+            )
         return self._client
 
     def enqueue_review_job(self, payload: dict[str, Any]) -> str:
