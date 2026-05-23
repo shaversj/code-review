@@ -113,9 +113,10 @@ Before writing code:
 1. Confirm working directory with `pwd`
 2. Read this file completely
 3. Read `README.md`
-4. Review the architecture and plan docs in `docs/superpowers/`
-5. Review recent commits with `git log --oneline -5`
-6. Run baseline verification:
+4. Read `docs/ARCHITECTURE.md`
+5. Review the detailed design and plan docs in `docs/superpowers/`
+6. Review recent commits with `git log --oneline -5`
+7. Run baseline verification:
 
    ```bash
    ./init.sh
@@ -143,6 +144,7 @@ If baseline verification fails, repair that first before adding new scope.
 - `Dockerfile` — App image build
 - `.env.example` — Environment variable template
 - `init.sh` — Standard dependency sync and verification path
+- `docs/ARCHITECTURE.md` — Current architecture and implementation boundaries
 - `localstack/init/ready.d/create-sqs.sh` — LocalStack queue initialization
 - `docs/superpowers/specs/2026-05-23-ai-code-reviewer-design.md` — Architecture spec
 - `docs/superpowers/plans/2026-05-23-ai-code-reviewer-mvp.md` — MVP implementation plan
