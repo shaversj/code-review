@@ -1,0 +1,29 @@
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    app_env: str = "development"
+    database_path: Path = Path("code-review.db")
+    github_app_id: int
+    github_private_key_path: Path
+    github_webhook_secret: str
+    github_allowed_repos: str
+    aws_region: str = "us-east-1"
+    sqs_queue_url: str
+    sqs_visibility_timeout_seconds: int = Field(default=900, ge=30)
+    sandbox_root: Path = Path(".sandboxes")
+
+    @property
+    def allowed_repo_set(self) -> set[str]:
+        return {item.strip() for item in self.github_allowed_repos.split(",") if item.strip()}
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
