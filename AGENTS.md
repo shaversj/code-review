@@ -1,85 +1,44 @@
 # AGENTS.md
 
-## Project Overview
+## Purpose
 
-AI Code Reviewer is a Python service for automated pull request review. It is a single-tenant GitHub App/webhook service that records PR review runs, queues work through SQS, checks out pull request code, runs allowlisted repo checks, and posts guarded GitHub review comments.
+This file is the agent operating guide for this repository. Keep project architecture, runtime topology, source layout, and known implementation gaps in `docs/ARCHITECTURE.md`; keep human-facing setup commands in `README.md`.
 
-The intended architecture is staged review:
+Agents should use this file to understand startup workflow, verification expectations, scope rules, and documentation lookup requirements.
 
-- FastAPI webhook receives GitHub pull request events
-- SQLite stores review runs and related metadata
-- SQS carries review jobs
-- Worker checks out the PR and runs configured checks
-- Deterministic pipeline currently creates findings from failed checks
-- Future Anthropic-backed scout/reviewer/verifier/reporter stages will replace or extend the deterministic pipeline
+## Required Reading
 
-## Current Project State
+Before writing code:
 
-- Python package: `code-review-app` version `0.1.0`
-- Python runtime target: `>=3.12`
-- Main framework: FastAPI + Uvicorn
-- Local/prototype persistence: SQLite with WAL mode
-- Queue backend: SQS-compatible API
-- Local SQS development: LocalStack through Docker Compose
-- Test framework: pytest
-- Linting: Ruff
-- Dependency manager: uv
-- Docker Compose starts `api`, `worker`, and `localstack`
-- LocalStack creates the `code-review-jobs` queue from `localstack/init/ready.d/create-sqs.sh`
-- The worker CLI currently receives SQS messages and deletes them; full `ReviewWorker` wiring is implemented as a unit-tested boundary but not yet connected to the CLI loop
-- GitHub App installation-token generation is not implemented yet
-- Anthropic is the selected first model provider, but model-backed review stages are not implemented yet
+1. Confirm working directory with `pwd`
+2. Read this file completely
+3. Read `README.md`
+4. Read `docs/ARCHITECTURE.md`
+5. Review the detailed design and plan docs in `docs/superpowers/`
+6. Review recent commits with `git log --oneline -5`
+7. Run baseline verification with `./init.sh`
+
+If baseline verification fails, repair that first before adding new scope.
 
 ## Commands
 
-```bash
-uv sync --extra dev              # Install local development dependencies
-./init.sh                        # Standard verification path
-uv run pytest -q                 # Run tests
-uv run ruff check .              # Run lint
-docker compose config --quiet    # Validate Docker Compose config
-docker compose up --build        # Start API, worker, and LocalStack
-docker compose down              # Stop local stack
-```
-
-Direct local API and worker:
+Standard verification:
 
 ```bash
-uv run uvicorn code_review_app.main:create_app --factory --reload
-uv run code-review-worker
+./init.sh
 ```
 
-Local health checks:
+Common development commands:
 
 ```bash
-curl http://localhost:8000/healthz
-
-aws --endpoint-url=http://localhost:4566 sqs get-queue-url \
-  --queue-name code-review-jobs \
-  --query QueueUrl \
-  --output text
+docker compose up --build
+docker compose down
+uv run pytest -q
+uv run ruff check .
+docker compose config --quiet
 ```
 
-## Environment Variables
-
-Required by the app:
-
-- `GITHUB_APP_ID`
-- `GITHUB_PRIVATE_KEY_PATH`
-- `GITHUB_WEBHOOK_SECRET`
-- `GITHUB_ALLOWED_REPOS`
-- `SQS_QUEUE_URL`
-
-Common local defaults:
-
-- `APP_ENV=development`
-- `DATABASE_PATH=./code-review.db`
-- `AWS_REGION=us-east-1`
-- `AWS_ENDPOINT_URL=http://localhost:4566` or `http://localstack:4566` inside Compose
-- `AWS_ACCESS_KEY_ID=test`
-- `AWS_SECRET_ACCESS_KEY=test`
-- `SQS_VISIBILITY_TIMEOUT_SECONDS=900`
-- `SANDBOX_ROOT=./.sandboxes`
+See `README.md` for local setup, Docker Compose usage, direct local API/worker commands, and local health checks.
 
 ## Documentation Lookup
 
@@ -106,47 +65,30 @@ Do not use Context7 for refactoring, writing scripts from scratch, debugging bus
 
 If a Context7 command fails with a quota error, tell the user and suggest `npx ctx7@latest login` or setting `CONTEXT7_API_KEY`.
 
-## Startup Workflow
-
-Before writing code:
-
-1. Confirm working directory with `pwd`
-2. Read this file completely
-3. Read `README.md`
-4. Read `docs/ARCHITECTURE.md`
-5. Review the detailed design and plan docs in `docs/superpowers/`
-6. Review recent commits with `git log --oneline -5`
-7. Run baseline verification:
-
-   ```bash
-   ./init.sh
-   ```
-
-If baseline verification fails, repair that first before adding new scope.
-
 ## Working Rules
 
 - Keep changes scoped to the requested feature or fix.
-- Prefer existing boundaries: `github/`, `queue/`, `review/`, `sandbox/`, `storage.py`, and `config.py`.
+- Prefer the boundaries described in `docs/ARCHITECTURE.md`.
 - Use tests first for behavior changes.
 - Do not claim completion without running the relevant verification commands.
 - Do not let model output choose shell commands. Repo checks must come from allowlisted `.code-review.yml` entries.
 - Do not add arbitrary command execution to the worker.
 - Do not push code, create PRs, or modify remote infrastructure unless explicitly asked.
-- Do not treat GitHub App auth or Anthropic integration as implemented; they are follow-up slices.
+- Do not treat planned gaps listed in `docs/ARCHITECTURE.md` as implemented.
 - Keep Docker Compose local-only. Production queue behavior should remain SQS-compatible.
-- Update docs when changing local setup, environment variables, or runtime commands.
+- Update `README.md` when changing local setup or commands.
+- Update `docs/ARCHITECTURE.md` when changing architecture, runtime topology, boundaries, configuration, security assumptions, or known gaps.
 
 ## Required Artifacts
 
 - `README.md` — Local setup and operator commands
+- `docs/ARCHITECTURE.md` — Current architecture, implementation boundaries, and known gaps
+- `init.sh` — Standard dependency sync and verification path
 - `docker-compose.yml` — Local runtime for API, worker, and LocalStack
 - `Dockerfile` — App image build
 - `.env.example` — Environment variable template
-- `init.sh` — Standard dependency sync and verification path
-- `docs/ARCHITECTURE.md` — Current architecture and implementation boundaries
 - `localstack/init/ready.d/create-sqs.sh` — LocalStack queue initialization
-- `docs/superpowers/specs/2026-05-23-ai-code-reviewer-design.md` — Architecture spec
+- `docs/superpowers/specs/2026-05-23-ai-code-reviewer-design.md` — Detailed design spec
 - `docs/superpowers/plans/2026-05-23-ai-code-reviewer-mvp.md` — MVP implementation plan
 - `tests/` — Regression and contract tests
 
@@ -156,31 +98,10 @@ A change is done only when all relevant items are true:
 
 - [ ] Target behavior is implemented
 - [ ] Tests were added or updated for changed behavior
-- [ ] `uv run pytest -q` ran successfully
-- [ ] `uv run ruff check .` ran successfully
-- [ ] `docker compose config --quiet` ran successfully when Compose files or env wiring changed
-- [ ] README or docs were updated when commands, setup, or architecture changed
+- [ ] `./init.sh` ran successfully
+- [ ] Docker runtime changes were checked with `docker compose up --build` when relevant
+- [ ] README or architecture docs were updated when commands, setup, boundaries, or runtime behavior changed
 - [ ] Repository is left in a clean, restartable state
-
-## Verification Commands
-
-Full local verification:
-
-```bash
-./init.sh
-```
-
-For Docker runtime changes, also run:
-
-```bash
-docker compose up --build
-curl http://localhost:8000/healthz
-aws --endpoint-url=http://localhost:4566 sqs get-queue-url \
-  --queue-name code-review-jobs \
-  --query QueueUrl \
-  --output text
-docker compose down
-```
 
 ## Escalation
 
@@ -201,6 +122,6 @@ Before ending a coding session:
 
 1. Run relevant verification commands
 2. Summarize what changed
-3. Record any unresolved risks or next slices
+3. Record unresolved risks or next slices in the right doc
 4. Commit with a descriptive message once work is in a safe state
-5. Leave the repo clean enough for the next session to start with the standard verification path
+5. Leave the repo clean enough for the next session to start with `./init.sh`
