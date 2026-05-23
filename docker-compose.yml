@@ -1,0 +1,66 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      SQS_ENDPOINT_STRATEGY: path
+    volumes:
+      - "./localstack/init/ready.d:/etc/localstack/init/ready.d:ro"
+      - "localstack-data:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+    command: >
+      uv run uvicorn code_review_app.main:create_app
+      --factory --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment: &app-environment
+      APP_ENV: development
+      DATABASE_PATH: /data/code-review.db
+      GITHUB_APP_ID: "${GITHUB_APP_ID:-123}"
+      GITHUB_PRIVATE_KEY_PATH: "${GITHUB_PRIVATE_KEY_PATH:-/tmp/github-app-private-key.pem}"
+      GITHUB_WEBHOOK_SECRET: "${GITHUB_WEBHOOK_SECRET:-devsecret}"
+      GITHUB_ALLOWED_REPOS: "${GITHUB_ALLOWED_REPOS:-owner/repo}"
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/code-review-jobs
+      SQS_VISIBILITY_TIMEOUT_SECONDS: "900"
+      SANDBOX_ROOT: /data/sandboxes
+    volumes:
+      - "./src:/app/src"
+      - "app-data:/data"
+    depends_on:
+      localstack:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+    command: uv run code-review-worker
+    environment:
+      <<: *app-environment
+    volumes:
+      - "./src:/app/src"
+      - "app-data:/data"
+    depends_on:
+      localstack:
+        condition: service_healthy
+
+volumes:
+  app-data:
+  localstack-data:
