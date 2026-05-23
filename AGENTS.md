@@ -14,9 +14,8 @@ Before writing code:
 2. Read this file completely
 3. Read `README.md`
 4. Read `docs/ARCHITECTURE.md`
-5. Review the detailed design and plan docs in `docs/superpowers/`
-6. Review recent commits with `git log --oneline -5`
-7. Run baseline verification with `./init.sh`
+5. Review recent commits with `git log --oneline -5`
+6. Run baseline verification with `./init.sh`
 
 If baseline verification fails, repair that first before adding new scope.
 
