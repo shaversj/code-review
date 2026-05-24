@@ -38,3 +38,11 @@ class DeterministicReviewPipeline:
                 )
             )
         return ReviewPipelineResult(leads=leads, findings=findings)
+
+
+class AnthropicReviewPipeline:
+    def __init__(self, gateway) -> None:
+        self.gateway = gateway
+
+    def run(self, workspace: Workspace, checks: list[CheckResult]) -> ReviewPipelineResult:
+        return self.gateway.review(workspace, checks)

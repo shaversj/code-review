@@ -4,7 +4,7 @@
 
 AI Code Reviewer is a single-tenant GitHub App service for automated pull request review. The service is designed around a staged review pipeline: accept GitHub pull request events quickly, enqueue durable review jobs, inspect the pull request in an isolated workspace, run allowlisted checks, verify findings, and post guarded GitHub review comments.
 
-The current implementation is an MVP foundation. It proves the service boundaries, persistence, SQS integration, checkout/check abstractions, and reporting guardrails. The model-backed review stages are planned but not yet implemented.
+The current implementation is an MVP foundation. It proves the service boundaries, persistence, SQS integration, checkout/check abstractions, reporting guardrails, and an optional Anthropic-backed review gateway.
 
 ## Runtime Topology
 
@@ -28,11 +28,14 @@ docker compose
 ```
 
 LocalStack creates the `code-review-jobs` queue during startup from `localstack/init/ready.d/create-sqs.sh`.
+The LocalStack service pins `localstack/localstack:4.11.1` and sets `ACTIVATE_PRO=0` because the local runtime only needs community SQS emulation. The 2026 `latest` image requires a LocalStack auth token.
 
 ## Source Layout
 
 ```text
 src/code_review_app/
+  ai/
+    anthropic.py         Anthropic Messages API gateway for JSON review results
   config.py              environment-driven settings
   main.py                FastAPI app factory
   cli.py                 worker command entry point
@@ -73,13 +76,17 @@ The worker CLI receives SQS messages and calls `ReviewWorker.handle_job`:
 1. Parse the queued review job.
 2. Exchange a GitHub App JWT for an installation token.
 3. Build an authenticated clone URL and GitHub REST client from that installation token.
-4. Mark the review run `running`.
-5. Clone/fetch the repository and compute a base-to-head diff.
-6. Load `.code-review.yml` from the checked-out repo.
-7. Run configured checks through the allowlisted command runner.
-8. Pass workspace and check results to the review pipeline.
-9. Post findings through the reporter.
-10. Mark the review run `completed` or `failed`.
+4. Mark old queued/running rows stale based on `STALE_RUN_AFTER_MINUTES`.
+5. Mark the review run `running`.
+6. Clone/fetch the repository and compute a base-to-head diff.
+7. Load `.code-review.yml` from the checked-out repo.
+8. Run configured checks through the allowlisted command runner.
+9. Persist check results.
+10. Pass workspace and check results to the selected review pipeline.
+11. Persist leads and findings.
+12. Post findings through the reporter.
+13. Persist posted comment IDs.
+14. Mark the review run `completed` or `failed`.
 
 The SQS message is deleted only after `ReviewWorker.handle_job` returns successfully. Failures are left for SQS redelivery.
 
@@ -100,7 +107,7 @@ The schema currently includes:
 - `leads`
 - `findings`
 
-Only review-run creation, lookup, stale marking, and status updates are implemented today. Persisting check runs, leads, findings, and posted comment IDs is planned.
+Review-run creation, lookup, stale marking, status updates, check result persistence, lead persistence, finding persistence, and posted comment ID persistence are implemented.
 
 SQLite is suitable for the current single-tenant local/prototype shape. Move to PostgreSQL if the service needs multiple app instances, high worker concurrency, or richer analytics.
 
@@ -148,18 +155,19 @@ Model output must not create or choose shell commands. Future model stages may r
 
 ## Review Pipeline
 
-The current MVP pipeline is deterministic. `DeterministicReviewPipeline` turns failed or timed-out configured checks into medium-severity findings.
+The default pipeline is deterministic. `DeterministicReviewPipeline` turns failed or timed-out configured checks into medium-severity findings.
 
-The intended model-backed pipeline is:
+The optional model-backed path is selected with `REVIEW_PIPELINE_PROVIDER=anthropic`. `AnthropicReviewGateway` uses the Anthropic Messages API and asks for a JSON object containing leads and findings:
 
 ```text
-Lead Scout
-  -> Deep Reviewer
-  -> Evidence Verifier
-  -> Reporter
+workspace diff + check results
+  -> AnthropicReviewGateway
+  -> AnthropicReviewPipeline
+  -> persisted leads/findings
+  -> reporter
 ```
 
-Anthropic is the selected first model provider. The model integration should sit behind a narrow gateway so review stages do not depend directly on a specific SDK call shape.
+The model gateway receives the diff and outputs review data only. It must not create or choose shell commands.
 
 ## Reporter Guardrails
 
@@ -169,9 +177,11 @@ Current behavior:
 
 - skip stale head SHAs
 - skip findings below `0.75` confidence
+- skip already-posted duplicate findings for the same repo, PR, head SHA, path, line, and title
 - post inline review comments through GitHub's pull request comments API
+- post issue summary comments when a finding cannot be placed inline
 
-Follow-up work should add diff-hunk-aware line placement, duplicate suppression, stale comment handling, and persisted posted comment IDs.
+Follow-up work should add diff-hunk-aware line placement and stale comment handling.
 
 ## Configuration
 
@@ -187,10 +197,15 @@ Settings are read from environment variables or `.env`:
 - `SQS_QUEUE_URL`
 - `SQS_VISIBILITY_TIMEOUT_SECONDS`
 - `SANDBOX_ROOT`
+- `STALE_RUN_AFTER_MINUTES`
+- `REVIEW_PIPELINE_PROVIDER`
+- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_MODEL`
+- `ANTHROPIC_MAX_TOKENS`
 
 For Docker Compose, app services use `AWS_ENDPOINT_URL=http://localstack:4566` and `SQS_QUEUE_URL=http://localstack:4566/000000000000/code-review-jobs`.
 
-Docker Compose mounts `./.secrets` read-only at `/run/secrets`; the default private-key path is `/run/secrets/github-app-private-key.pem`.
+Docker Compose mounts the ignored local `./.secrets` directory read-only at `/run/secrets`; the default private-key path is `/run/secrets/github-app-private-key.pem`. The private key may live inside the working directory for local development as long as it remains ignored by git and is never committed.
 
 ## Local Development
 
@@ -225,6 +240,7 @@ Current rules:
 - Do not push commits or mutate remote repositories.
 - Do not expose sandbox filesystem paths in public comments.
 - Keep LocalStack and Docker Compose local-only.
+- Keep model output limited to review leads/findings. Model output must not trigger command execution.
 
 Planned hardening:
 
@@ -235,7 +251,6 @@ Planned hardening:
 
 ## Known Gaps
 
-- Anthropic-backed scout/reviewer/verifier/reporter stages are not yet implemented.
-- Check runs, leads, findings, and posted comment IDs are not yet persisted.
 - Inline comment positioning is basic and not diff-hunk-aware.
 - Local sandboxing uses filesystem workspaces, not container isolation.
+- The Anthropic path is a single JSON review gateway, not yet a multi-agent scout/reviewer/verifier workflow.

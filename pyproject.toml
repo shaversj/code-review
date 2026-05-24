@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Single-tenant GitHub App for AI-assisted PR review"
 requires-python = ">=3.12"
 dependencies = [
+  "anthropic>=0.74",
   "boto3>=1.34",
   "fastapi>=0.115",
   "httpx>=0.27",

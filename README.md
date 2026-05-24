@@ -4,12 +4,19 @@ Single-tenant GitHub App service for automated pull request review.
 
 ## Docker Compose Setup
 
-Store your GitHub App private key outside git before starting the stack:
+Store your GitHub App private key in the ignored local `.secrets` directory before starting the stack:
 
 ```bash
 mkdir -p .secrets
 cp /path/to/downloaded-private-key.pem .secrets/github-app-private-key.pem
 chmod 600 .secrets/github-app-private-key.pem
+```
+
+The `.secrets/` directory and `*.pem` files are intentionally ignored by git. The PEM can live inside the working directory for Docker Compose convenience, but it must never be staged or committed. You can confirm it is ignored with:
+
+```bash
+git check-ignore -v .secrets/github-app-private-key.pem
+git status --short
 ```
 
 ```bash
@@ -23,6 +30,8 @@ This starts:
 - `localstack`: local SQS emulator on `http://localhost:4566`
 
 LocalStack creates the `code-review-jobs` queue automatically from `localstack/init/ready.d/create-sqs.sh`.
+
+The Compose file pins LocalStack to `localstack/localstack:4.11.1` and sets `ACTIVATE_PRO=0`. LocalStack's 2026 `latest` image requires a `LOCALSTACK_AUTH_TOKEN`, while this project only needs local SQS emulation.
 
 Check the API:
 
@@ -47,6 +56,17 @@ GITHUB_WEBHOOK_SECRET=devsecret
 GITHUB_ALLOWED_REPOS=owner/repo
 ```
 
+The default review pipeline is deterministic and only turns failed configured checks into findings. To use Anthropic for model-backed review, set:
+
+```bash
+REVIEW_PIPELINE_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-5
+ANTHROPIC_MAX_TOKENS=4000
+```
+
+The worker marks queued or running review runs older than `STALE_RUN_AFTER_MINUTES` as failed stale runs during startup. Set `STALE_RUN_AFTER_MINUTES=0` only for local cleanup.
+
 ## Direct Local Setup
 
 Use this path if you want to run without Docker Compose.
@@ -57,6 +77,8 @@ cp .env.example .env
 ```
 
 Fill in `.env` with GitHub App and SQS settings.
+
+For direct local runs, set `GITHUB_PRIVATE_KEY_PATH` to a host-visible path such as `./.secrets/github-app-private-key.pem`. For Docker Compose, use the container-visible `/run/secrets/...` path.
 
 ### Run API
 

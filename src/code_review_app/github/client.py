@@ -20,6 +20,11 @@ class GitHubClientProtocol(Protocol):
     ) -> str:
         raise NotImplementedError
 
+    def create_pull_request_review(
+        self, repo_full_name: str, pr_number: int, head_sha: str, body: str
+    ) -> str:
+        raise NotImplementedError
+
 
 class GitHubClient:
     def __init__(self, token: str) -> None:
@@ -64,6 +69,18 @@ class GitHubClient:
                 "line": finding.line,
                 "side": "RIGHT",
             },
+            timeout=20,
+        )
+        response.raise_for_status()
+        return str(response.json()["id"])
+
+    def create_pull_request_review(
+        self, repo_full_name: str, pr_number: int, head_sha: str, body: str
+    ) -> str:
+        response = httpx.post(
+            f"https://api.github.com/repos/{repo_full_name}/pulls/{pr_number}/reviews",
+            headers=self._headers(),
+            json={"commit_id": head_sha, "body": body, "event": "COMMENT"},
             timeout=20,
         )
         response.raise_for_status()

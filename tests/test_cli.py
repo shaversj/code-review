@@ -6,8 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from code_review_app.cli import process_message
+from code_review_app.cli import build_review_pipeline, build_review_worker, process_message
 from code_review_app.config import Settings
+from code_review_app.review.pipeline import AnthropicReviewPipeline, DeterministicReviewPipeline
+from code_review_app.storage import Storage
 
 
 class FakeAuth:
@@ -111,3 +113,51 @@ def test_process_message_leaves_message_for_redelivery_when_worker_fails(tmp_pat
         )
 
     assert queue.deleted == []
+
+
+def test_build_review_pipeline_defaults_to_deterministic(tmp_path: Path) -> None:
+    assert isinstance(build_review_pipeline(settings(tmp_path)), DeterministicReviewPipeline)
+
+
+def test_build_review_pipeline_can_use_anthropic(tmp_path: Path) -> None:
+    class FakeGateway:
+        def __init__(self, model: str, max_tokens: int) -> None:
+            self.model = model
+            self.max_tokens = max_tokens
+
+    configured = Settings(
+        database_path=tmp_path / "review.db",
+        github_app_id=123,
+        github_private_key_path=tmp_path / "app.pem",
+        github_webhook_secret="secret",
+        github_allowed_repos="owner/repo",
+        sqs_queue_url="https://sqs.us-east-1.amazonaws.com/123/reviews",
+        review_pipeline_provider="anthropic",
+        anthropic_model="claude-test",
+        anthropic_max_tokens=321,
+    )
+
+    pipeline = build_review_pipeline(configured, gateway_factory=FakeGateway)
+
+    assert isinstance(pipeline, AnthropicReviewPipeline)
+    assert pipeline.gateway.model == "claude-test"
+    assert pipeline.gateway.max_tokens == 321
+
+
+def test_build_review_worker_marks_stale_incomplete_runs(tmp_path: Path) -> None:
+    configured = Settings(
+        database_path=tmp_path / "review.db",
+        github_app_id=123,
+        github_private_key_path=tmp_path / "app.pem",
+        github_webhook_secret="secret",
+        github_allowed_repos="owner/repo",
+        sqs_queue_url="https://sqs.us-east-1.amazonaws.com/123/reviews",
+        stale_run_after_minutes=0,
+    )
+    storage = Storage(configured.database_path)
+    storage.initialize()
+    run = storage.create_review_run("owner/repo", 7, "base", "head", 42)
+
+    build_review_worker(configured, "token", lambda job: "clone")
+
+    assert storage.get_review_run(run["id"])["conclusion"] == "stale incomplete run"

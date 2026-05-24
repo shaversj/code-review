@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Callable
 from typing import Protocol
 
 from code_review_app.config import Settings, get_settings
+from code_review_app.ai.anthropic import AnthropicReviewGateway
 from code_review_app.github.auth import GitHubAppAuth
 from code_review_app.github.client import GitHubClient
 from code_review_app.queue.sqs import SqsQueue
-from code_review_app.review.pipeline import DeterministicReviewPipeline
+from code_review_app.review.pipeline import AnthropicReviewPipeline, DeterministicReviewPipeline
 from code_review_app.review.reporter import GitHubReporter
 from code_review_app.review.worker import ReviewWorker
 from code_review_app.sandbox.checkout import CheckoutManager
@@ -17,9 +19,26 @@ from code_review_app.sandbox.checks import CheckRunner
 from code_review_app.storage import Storage
 
 
+logger = logging.getLogger(__name__)
+
+
 class QueueProtocol(Protocol):
     def delete_message(self, receipt_handle: str) -> None:
         raise NotImplementedError
+
+
+def build_review_pipeline(
+    settings: Settings,
+    gateway_factory: Callable = AnthropicReviewGateway,
+):
+    if settings.review_pipeline_provider == "anthropic":
+        return AnthropicReviewPipeline(
+            gateway_factory(
+                model=settings.anthropic_model,
+                max_tokens=settings.anthropic_max_tokens,
+            )
+        )
+    return DeterministicReviewPipeline()
 
 
 def build_review_worker(
@@ -29,12 +48,13 @@ def build_review_worker(
 ) -> ReviewWorker:
     storage = Storage(settings.database_path)
     storage.initialize()
+    storage.mark_incomplete_runs_stale(settings.stale_run_after_minutes)
     return ReviewWorker(
         storage=storage,
         checkout=CheckoutManager(settings.sandbox_root),
         checks=CheckRunner(),
-        pipeline=DeterministicReviewPipeline(),
-        reporter=GitHubReporter(GitHubClient(github_token)),
+        pipeline=build_review_pipeline(settings),
+        reporter=GitHubReporter(GitHubClient(github_token), duplicate_store=storage),
         repo_url_builder=repo_url_builder,
     )
 
@@ -47,6 +67,7 @@ def process_message(
     worker_factory: Callable = build_review_worker,
 ) -> None:
     job = json.loads(message["Body"])
+    logger.info("creating GitHub installation token", extra={"review_run_id": job["review_run_id"]})
     auth = auth_factory(settings.github_app_id, settings.github_private_key_path)
     installation_token = auth.create_installation_token(int(job["installation_id"])).token
 
@@ -59,6 +80,7 @@ def process_message(
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
     settings = get_settings()
     queue = SqsQueue.from_region(
         settings.aws_region,

@@ -1,12 +1,32 @@
 from __future__ import annotations
 
+from typing import Protocol
+
 from code_review_app.github.client import GitHubClientProtocol
 from code_review_app.review.models import Finding
 
 
+class DuplicateStore(Protocol):
+    def has_posted_finding(
+        self,
+        repo_full_name: str,
+        pr_number: int,
+        head_sha: str,
+        file_path: str,
+        line: int,
+        title: str,
+    ) -> bool:
+        raise NotImplementedError
+
+
 class GitHubReporter:
-    def __init__(self, github_client: GitHubClientProtocol) -> None:
+    def __init__(
+        self,
+        github_client: GitHubClientProtocol,
+        duplicate_store: DuplicateStore | None = None,
+    ) -> None:
         self.github_client = github_client
+        self.duplicate_store = duplicate_store
 
     def post_findings(
         self,
@@ -23,6 +43,18 @@ class GitHubReporter:
         for finding in findings:
             if finding.confidence < 0.75:
                 continue
+            if self._is_duplicate(repo_full_name, pr_number, expected_head_sha, finding):
+                continue
+            if not self._is_inline_placeable(finding):
+                posted_ids.append(
+                    self.github_client.create_pull_request_review(
+                        repo_full_name,
+                        pr_number,
+                        expected_head_sha,
+                        self._summary_body(finding),
+                    )
+                )
+                continue
             posted_ids.append(
                 self.github_client.create_review_comment(
                     repo_full_name,
@@ -32,3 +64,34 @@ class GitHubReporter:
                 )
             )
         return posted_ids
+
+    def _is_duplicate(
+        self,
+        repo_full_name: str,
+        pr_number: int,
+        expected_head_sha: str,
+        finding: Finding,
+    ) -> bool:
+        if self.duplicate_store is None:
+            return False
+        return self.duplicate_store.has_posted_finding(
+            repo_full_name,
+            pr_number,
+            expected_head_sha,
+            finding.file_path,
+            finding.line,
+            finding.title,
+        )
+
+    @staticmethod
+    def _is_inline_placeable(finding: Finding) -> bool:
+        return finding.file_path not in {"", "."} and finding.line > 0
+
+    @staticmethod
+    def _summary_body(finding: Finding) -> str:
+        return (
+            f"**{finding.severity.upper()}: {finding.title}**\n\n"
+            f"{finding.behavior_at_risk}\n\n"
+            f"Evidence: {finding.evidence}\n\n"
+            f"Suggested action: {finding.suggested_action}"
+        )
