@@ -38,6 +38,7 @@ src/code_review_app/
   cli.py                 worker command entry point
   storage.py             SQLite schema and review-run persistence
   github/
+    auth.py              GitHub App JWT and installation token exchange
     webhook.py           GitHub webhook signature verification and routing
     client.py            GitHub REST API wrapper for PR state and comments
   queue/
@@ -67,17 +68,20 @@ The API request returns after enqueueing. Review execution is intentionally outs
 
 ## Worker Flow
 
-The intended worker flow is implemented in `ReviewWorker.handle_job`:
+The worker CLI receives SQS messages and calls `ReviewWorker.handle_job`:
 
-1. Mark the review run `running`.
-2. Clone/fetch the repository and compute a base-to-head diff.
-3. Load `.code-review.yml` from the checked-out repo.
-4. Run configured checks through the allowlisted command runner.
-5. Pass workspace and check results to the review pipeline.
-6. Post findings through the reporter.
-7. Mark the review run `completed` or `failed`.
+1. Parse the queued review job.
+2. Exchange a GitHub App JWT for an installation token.
+3. Build an authenticated clone URL and GitHub REST client from that installation token.
+4. Mark the review run `running`.
+5. Clone/fetch the repository and compute a base-to-head diff.
+6. Load `.code-review.yml` from the checked-out repo.
+7. Run configured checks through the allowlisted command runner.
+8. Pass workspace and check results to the review pipeline.
+9. Post findings through the reporter.
+10. Mark the review run `completed` or `failed`.
 
-Current limitation: the `code-review-worker` CLI currently receives and deletes SQS messages, but it does not yet instantiate and call `ReviewWorker`. Wiring the CLI to the full worker boundary is a follow-up slice.
+The SQS message is deleted only after `ReviewWorker.handle_job` returns successfully. Failures are left for SQS redelivery.
 
 ## Persistence
 
@@ -186,6 +190,8 @@ Settings are read from environment variables or `.env`:
 
 For Docker Compose, app services use `AWS_ENDPOINT_URL=http://localstack:4566` and `SQS_QUEUE_URL=http://localstack:4566/000000000000/code-review-jobs`.
 
+Docker Compose mounts `./.secrets` read-only at `/run/secrets`; the default private-key path is `/run/secrets/github-app-private-key.pem`.
+
 ## Local Development
 
 Primary local path:
@@ -222,7 +228,6 @@ Current rules:
 
 Planned hardening:
 
-- GitHub App JWT and installation-token exchange.
 - Container isolation for check execution.
 - Secret redaction from command output before model prompts or persistence.
 - SQS visibility extension during long reviews.
@@ -230,8 +235,6 @@ Planned hardening:
 
 ## Known Gaps
 
-- Worker CLI is not yet wired to `ReviewWorker`.
-- GitHub App installation-token generation is not yet implemented.
 - Anthropic-backed scout/reviewer/verifier/reporter stages are not yet implemented.
 - Check runs, leads, findings, and posted comment IDs are not yet persisted.
 - Inline comment positioning is basic and not diff-hunk-aware.

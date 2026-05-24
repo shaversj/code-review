@@ -31,7 +31,7 @@ services:
       APP_ENV: development
       DATABASE_PATH: /data/code-review.db
       GITHUB_APP_ID: "${GITHUB_APP_ID:-123}"
-      GITHUB_PRIVATE_KEY_PATH: "${GITHUB_PRIVATE_KEY_PATH:-/tmp/github-app-private-key.pem}"
+      GITHUB_PRIVATE_KEY_PATH: "${GITHUB_PRIVATE_KEY_PATH:-/run/secrets/github-app-private-key.pem}"
       GITHUB_WEBHOOK_SECRET: "${GITHUB_WEBHOOK_SECRET:-devsecret}"
       GITHUB_ALLOWED_REPOS: "${GITHUB_ALLOWED_REPOS:-owner/repo}"
       AWS_ACCESS_KEY_ID: test
@@ -44,6 +44,7 @@ services:
     volumes:
       - "./src:/app/src"
       - "app-data:/data"
+      - "./.secrets:/run/secrets:ro"
     depends_on:
       localstack:
         condition: service_healthy
@@ -57,6 +58,7 @@ services:
     volumes:
       - "./src:/app/src"
       - "app-data:/data"
+      - "./.secrets:/run/secrets:ro"
     depends_on:
       localstack:
         condition: service_healthy

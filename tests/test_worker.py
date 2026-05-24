@@ -6,7 +6,11 @@ from code_review_app.storage import Storage
 
 
 class FakeCheckout:
+    def __init__(self) -> None:
+        self.repo_url: str | None = None
+
     def prepare(self, repo_url: str, review_run_id: int, base_sha: str, head_sha: str) -> Workspace:
+        self.repo_url = repo_url
         return Workspace(path=Path("."), base_sha=base_sha, head_sha=head_sha, diff="+x")
 
 
@@ -45,3 +49,31 @@ def test_worker_completes_review_run(tmp_path: Path) -> None:
     )
 
     assert storage.get_review_run(run["id"])["status"] == "completed"
+
+
+def test_worker_uses_injected_repo_url_builder(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "review.db")
+    storage.initialize()
+    run = storage.create_review_run("owner/repo", 7, "base", "head", 42)
+    checkout = FakeCheckout()
+    worker = ReviewWorker(
+        storage,
+        checkout,
+        FakeChecks(),
+        FakePipeline(),
+        FakeReporter(),
+        repo_url_builder=lambda job: f"tokenized:{job['repo_full_name']}",
+    )
+
+    worker.handle_job(
+        {
+            "review_run_id": run["id"],
+            "repo_full_name": "owner/repo",
+            "pr_number": 7,
+            "base_sha": "base",
+            "head_sha": "head",
+            "installation_id": 42,
+        }
+    )
+
+    assert checkout.repo_url == "tokenized:owner/repo"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 from code_review_app.review.models import CheckResult, ReviewPipelineResult, Workspace
 from code_review_app.sandbox.checks import load_review_config
@@ -38,18 +38,20 @@ class ReviewWorker:
         checks: CheckRunnerProtocol,
         pipeline: PipelineProtocol,
         reporter: ReporterProtocol,
+        repo_url_builder: Callable[[dict], str] | None = None,
     ) -> None:
         self.storage = storage
         self.checkout = checkout
         self.checks = checks
         self.pipeline = pipeline
         self.reporter = reporter
+        self.repo_url_builder = repo_url_builder or self.default_repo_url
 
     def handle_job(self, job: dict) -> None:
         review_run_id = int(job["review_run_id"])
         self.storage.update_review_run_status(review_run_id, "running")
         try:
-            repo_url = f"https://github.com/{job['repo_full_name']}.git"
+            repo_url = self.repo_url_builder(job)
             workspace = self.checkout.prepare(
                 repo_url=repo_url,
                 review_run_id=review_run_id,
@@ -71,3 +73,7 @@ class ReviewWorker:
         except Exception as exc:
             self.storage.update_review_run_status(review_run_id, "failed", conclusion=str(exc))
             raise
+
+    @staticmethod
+    def default_repo_url(job: dict) -> str:
+        return f"https://github.com/{job['repo_full_name']}.git"

@@ -12,3 +12,4 @@ htmlcov/
 .sandboxes/
 docs/superpowers/
 *.pem
+.secrets/

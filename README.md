@@ -4,6 +4,14 @@ Single-tenant GitHub App service for automated pull request review.
 
 ## Docker Compose Setup
 
+Store your GitHub App private key outside git before starting the stack:
+
+```bash
+mkdir -p .secrets
+cp /path/to/downloaded-private-key.pem .secrets/github-app-private-key.pem
+chmod 600 .secrets/github-app-private-key.pem
+```
+
 ```bash
 docker compose up --build
 ```
@@ -34,6 +42,7 @@ aws --endpoint-url=http://localhost:4566 sqs get-queue-url \
 Override local defaults by exporting environment variables before `docker compose up`:
 
 ```bash
+GITHUB_APP_ID=123456
 GITHUB_WEBHOOK_SECRET=devsecret
 GITHUB_ALLOWED_REPOS=owner/repo
 ```
