@@ -29,7 +29,7 @@ This starts:
 - `worker`: local review job worker
 - `localstack`: local SQS emulator on `http://localhost:4566`
 
-The app image includes Python, git, Node.js, and npm so the worker can run configured checks for Python and Node repositories. If a configured command is missing, the worker records it as a failed check instead of crashing.
+The app image includes Python, git, Node.js 24, and npm so the worker can run configured checks for Python and modern Node repositories. If a configured command is missing, the worker records it as a failed check instead of crashing.
 
 LocalStack creates the `code-review-jobs` queue automatically from `localstack/init/ready.d/create-sqs.sh`.
 
