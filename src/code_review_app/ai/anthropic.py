@@ -39,13 +39,15 @@ class AnthropicReviewGateway:
     def __init__(
         self,
         client: Any | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
         model: str = "claude-sonnet-4-5",
         max_tokens: int = 4000,
     ) -> None:
         if client is None:
             from anthropic import Anthropic
 
-            client = Anthropic()
+            client = Anthropic(api_key=api_key, base_url=base_url)
         self.client = client
         self.model = model
         self.max_tokens = max_tokens

@@ -25,8 +25,10 @@ class Settings(BaseSettings):
     sandbox_root: Path = Path(".sandboxes")
     stale_run_after_minutes: int = Field(default=60, ge=0)
     review_pipeline_provider: str = "deterministic"
-    anthropic_model: str = "claude-sonnet-4-5"
-    anthropic_max_tokens: int = Field(default=4000, ge=256)
+    model_api_key: str | None = None
+    model_base_url: str | None = None
+    model_name: str = "MiniMax-M2.7"
+    model_max_tokens: int = Field(default=4000, ge=256)
 
     @property
     def allowed_repo_set(self) -> set[str]:

@@ -35,7 +35,7 @@ The LocalStack service pins `localstack/localstack:4.11.1` and sets `ACTIVATE_PR
 ```text
 src/code_review_app/
   ai/
-    anthropic.py         Anthropic Messages API gateway for JSON review results
+    anthropic.py         Anthropic-compatible Messages API gateway for JSON review results
   config.py              environment-driven settings
   main.py                FastAPI app factory
   cli.py                 worker command entry point
@@ -157,7 +157,7 @@ Model output must not create or choose shell commands. Future model stages may r
 
 The default pipeline is deterministic. `DeterministicReviewPipeline` turns failed or timed-out configured checks into medium-severity findings.
 
-The optional model-backed path is selected with `REVIEW_PIPELINE_PROVIDER=anthropic`. `AnthropicReviewGateway` uses the Anthropic Messages API and asks for a JSON object containing leads and findings:
+The optional model-backed path is selected with `REVIEW_PIPELINE_PROVIDER=anthropic-compatible`. `AnthropicReviewGateway` uses an Anthropic-compatible Messages API and asks for a JSON object containing leads and findings. The default compatible target is MiniMax:
 
 ```text
 workspace diff + check results
@@ -199,9 +199,10 @@ Settings are read from environment variables or `.env`:
 - `SANDBOX_ROOT`
 - `STALE_RUN_AFTER_MINUTES`
 - `REVIEW_PIPELINE_PROVIDER`
-- `ANTHROPIC_API_KEY`
-- `ANTHROPIC_MODEL`
-- `ANTHROPIC_MAX_TOKENS`
+- `MODEL_API_KEY`
+- `MODEL_BASE_URL`
+- `MODEL_NAME`
+- `MODEL_MAX_TOKENS`
 
 For Docker Compose, app services use `AWS_ENDPOINT_URL=http://localstack:4566` and `SQS_QUEUE_URL=http://localstack:4566/000000000000/code-review-jobs`.
 

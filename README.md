@@ -56,13 +56,14 @@ GITHUB_WEBHOOK_SECRET=devsecret
 GITHUB_ALLOWED_REPOS=owner/repo
 ```
 
-The default review pipeline is deterministic and only turns failed configured checks into findings. To use Anthropic for model-backed review, set:
+The default review pipeline is deterministic and only turns failed configured checks into findings. To use MiniMax through its Anthropic-compatible API, set:
 
 ```bash
-REVIEW_PIPELINE_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-sonnet-4-5
-ANTHROPIC_MAX_TOKENS=4000
+REVIEW_PIPELINE_PROVIDER=anthropic-compatible
+MODEL_API_KEY=your-minimax-api-key
+MODEL_BASE_URL=https://api.minimax.io/anthropic
+MODEL_NAME=MiniMax-M2.7
+MODEL_MAX_TOKENS=4000
 ```
 
 The worker marks queued or running review runs older than `STALE_RUN_AFTER_MINUTES` as failed stale runs during startup. Set `STALE_RUN_AFTER_MINUTES=0` only for local cleanup.

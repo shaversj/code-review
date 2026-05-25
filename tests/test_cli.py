@@ -121,7 +121,15 @@ def test_build_review_pipeline_defaults_to_deterministic(tmp_path: Path) -> None
 
 def test_build_review_pipeline_can_use_anthropic(tmp_path: Path) -> None:
     class FakeGateway:
-        def __init__(self, model: str, max_tokens: int) -> None:
+        def __init__(
+            self,
+            api_key: str | None,
+            base_url: str | None,
+            model: str,
+            max_tokens: int,
+        ) -> None:
+            self.api_key = api_key
+            self.base_url = base_url
             self.model = model
             self.max_tokens = max_tokens
 
@@ -132,15 +140,19 @@ def test_build_review_pipeline_can_use_anthropic(tmp_path: Path) -> None:
         github_webhook_secret="secret",
         github_allowed_repos="owner/repo",
         sqs_queue_url="https://sqs.us-east-1.amazonaws.com/123/reviews",
-        review_pipeline_provider="anthropic",
-        anthropic_model="claude-test",
-        anthropic_max_tokens=321,
+        review_pipeline_provider="anthropic-compatible",
+        model_api_key="minimax-key",
+        model_base_url="https://api.minimax.io/anthropic",
+        model_name="MiniMax-M2.7",
+        model_max_tokens=321,
     )
 
     pipeline = build_review_pipeline(configured, gateway_factory=FakeGateway)
 
     assert isinstance(pipeline, AnthropicReviewPipeline)
-    assert pipeline.gateway.model == "claude-test"
+    assert pipeline.gateway.api_key == "minimax-key"
+    assert pipeline.gateway.base_url == "https://api.minimax.io/anthropic"
+    assert pipeline.gateway.model == "MiniMax-M2.7"
     assert pipeline.gateway.max_tokens == 321
 
 

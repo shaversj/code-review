@@ -44,9 +44,10 @@ services:
       SANDBOX_ROOT: /data/sandboxes
       STALE_RUN_AFTER_MINUTES: "${STALE_RUN_AFTER_MINUTES:-60}"
       REVIEW_PIPELINE_PROVIDER: "${REVIEW_PIPELINE_PROVIDER:-deterministic}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-      ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-claude-sonnet-4-5}"
-      ANTHROPIC_MAX_TOKENS: "${ANTHROPIC_MAX_TOKENS:-4000}"
+      MODEL_API_KEY: "${MODEL_API_KEY:-}"
+      MODEL_BASE_URL: "${MODEL_BASE_URL:-https://api.minimax.io/anthropic}"
+      MODEL_NAME: "${MODEL_NAME:-MiniMax-M2.7}"
+      MODEL_MAX_TOKENS: "${MODEL_MAX_TOKENS:-4000}"
     volumes:
       - "./src:/app/src"
       - "app-data:/data"

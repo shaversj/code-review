@@ -31,11 +31,13 @@ def build_review_pipeline(
     settings: Settings,
     gateway_factory: Callable = AnthropicReviewGateway,
 ):
-    if settings.review_pipeline_provider == "anthropic":
+    if settings.review_pipeline_provider in {"anthropic", "anthropic-compatible"}:
         return AnthropicReviewPipeline(
             gateway_factory(
-                model=settings.anthropic_model,
-                max_tokens=settings.anthropic_max_tokens,
+                api_key=settings.model_api_key,
+                base_url=settings.model_base_url,
+                model=settings.model_name,
+                max_tokens=settings.model_max_tokens,
             )
         )
     return DeterministicReviewPipeline()

@@ -53,7 +53,11 @@ def test_anthropic_gateway_requests_json_review_payload() -> None:
             }
         )
     )
-    gateway = AnthropicReviewGateway(client=client, model="claude-test", max_tokens=500)
+    gateway = AnthropicReviewGateway(
+        client=client,
+        model="MiniMax-M2.7",
+        max_tokens=500,
+    )
 
     result = gateway.review(
         Workspace(path=Path("."), base_sha="base", head_sha="head", diff="+bug"),
@@ -71,7 +75,7 @@ def test_anthropic_gateway_requests_json_review_payload() -> None:
     )
 
     call = client.messages.calls[0]
-    assert call["model"] == "claude-test"
+    assert call["model"] == "MiniMax-M2.7"
     assert call["temperature"] == 0
     assert "Return only JSON" in call["system"]
     assert result.findings[0].title == "Bug"
