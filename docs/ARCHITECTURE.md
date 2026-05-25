@@ -48,6 +48,7 @@ src/code_review_app/
     sqs.py               SQS-compatible queue adapter
   review/
     coordinator.py       PR event to ReviewRun/SQS job orchestration
+    diff.py              unified diff parser for inline comment eligibility
     models.py            shared review dataclasses
     pipeline.py          deterministic MVP review pipeline
     reporter.py          guarded GitHub comment posting
@@ -84,9 +85,10 @@ The worker CLI receives SQS messages and calls `ReviewWorker.handle_job`:
 9. Persist check results.
 10. Pass workspace and check results to the selected review pipeline.
 11. Persist leads and findings.
-12. Post findings through the reporter.
-13. Persist posted comment IDs.
-14. Mark the review run `completed` or `failed`.
+12. Build an index of right-side lines present in the pull request diff.
+13. Post findings through the reporter.
+14. Persist posted comment IDs.
+15. Mark the review run `completed` or `failed`.
 
 The SQS message is deleted only after `ReviewWorker.handle_job` returns successfully. Failures are left for SQS redelivery.
 
@@ -184,11 +186,11 @@ Current behavior:
 - skip stale head SHAs
 - skip findings below `0.75` confidence
 - skip already-posted duplicate findings for the same repo, PR, head SHA, path, line, and title
-- post inline review comments through GitHub's pull request comments API
-- post issue summary comments when a finding cannot be placed inline
+- post inline review comments only when the finding path and line are present on the right side of the pull request diff
+- post issue summary comments when a finding cannot be placed inline from the local diff index
 - fall back to the summary review when GitHub rejects an inline comment location with validation errors
 
-Follow-up work should add diff-hunk-aware line placement and stale comment handling.
+Follow-up work should add nearest-line remapping for findings that point just outside a diff hunk and stale comment handling.
 
 ## Configuration
 

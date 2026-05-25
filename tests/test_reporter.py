@@ -1,4 +1,5 @@
 from code_review_app.github.client import ReviewCommentPlacementError
+from code_review_app.review.diff import DiffIndex
 from code_review_app.review.models import Finding
 from code_review_app.review.reporter import GitHubReporter
 
@@ -96,6 +97,20 @@ def inline_finding(title: str) -> Finding:
     )
 
 
+def inline_finding_at(title: str, line: int) -> Finding:
+    item = inline_finding(title)
+    return type(item)(
+        file_path=item.file_path,
+        line=line,
+        severity=item.severity,
+        title=item.title,
+        behavior_at_risk=item.behavior_at_risk,
+        evidence=item.evidence,
+        suggested_action=item.suggested_action,
+        confidence=item.confidence,
+    )
+
+
 def test_reporter_posts_when_head_sha_matches() -> None:
     client = FakeGitHubClient("head")
     reporter = GitHubReporter(client)
@@ -172,3 +187,29 @@ def test_reporter_falls_back_to_summary_when_github_rejects_inline_location() ->
     assert [comment["title"] for comment in client.comments] == ["Accepted inline"]
     assert len(client.summary_comments) == 1
     assert "Rejected inline" in client.summary_comments[0]["body"]
+
+
+def test_reporter_only_posts_inline_when_location_is_in_diff() -> None:
+    client = FakeGitHubClient("head")
+    reporter = GitHubReporter(client)
+    diff_index = DiffIndex.from_unified_diff(
+        """diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1,2 +1,2 @@
+ line one
++line two
+"""
+    )
+
+    posted = reporter.post_findings(
+        "owner/repo",
+        5,
+        "head",
+        [inline_finding_at("Inline", 2), inline_finding_at("Summary", 20)],
+        inline_locations=diff_index,
+    )
+
+    assert posted == ["comment-1", "summary-1"]
+    assert [comment["title"] for comment in client.comments] == ["Inline"]
+    assert "Summary" in client.summary_comments[0]["body"]

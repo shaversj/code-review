@@ -11,7 +11,19 @@ class FakeCheckout:
 
     def prepare(self, repo_url: str, review_run_id: int, base_sha: str, head_sha: str) -> Workspace:
         self.repo_url = repo_url
-        return Workspace(path=Path("."), base_sha=base_sha, head_sha=head_sha, diff="+x")
+        return Workspace(
+            path=Path("."),
+            base_sha=base_sha,
+            head_sha=head_sha,
+            diff="""diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1,2 +1,3 @@
+ one
++two
+ three
+""",
+        )
 
 
 class FakeChecks:
@@ -58,9 +70,18 @@ class FakePipeline:
 
 
 class FakeReporter:
+    def __init__(self) -> None:
+        self.inline_locations = None
+
     def post_findings(
-        self, repo_full_name: str, pr_number: int, expected_head_sha: str, findings: list
+        self,
+        repo_full_name: str,
+        pr_number: int,
+        expected_head_sha: str,
+        findings: list,
+        inline_locations=None,
     ) -> list[str]:
+        self.inline_locations = inline_locations
         return ["comment-1"]
 
 
@@ -137,3 +158,25 @@ def test_worker_uses_injected_repo_url_builder(tmp_path: Path) -> None:
     )
 
     assert checkout.repo_url == "tokenized:owner/repo"
+
+
+def test_worker_passes_diff_index_to_reporter(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "review.db")
+    storage.initialize()
+    run = storage.create_review_run("owner/repo", 7, "base", "head", 42)
+    reporter = FakeReporter()
+    worker = ReviewWorker(storage, FakeCheckout(), FakeChecks(), FakePipeline(), reporter)
+
+    worker.handle_job(
+        {
+            "review_run_id": run["id"],
+            "repo_full_name": "owner/repo",
+            "pr_number": 7,
+            "base_sha": "base",
+            "head_sha": "head",
+            "installation_id": 42,
+        }
+    )
+
+    assert reporter.inline_locations is not None
+    assert reporter.inline_locations.has_right_line("app.py", 2)

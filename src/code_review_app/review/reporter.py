@@ -4,6 +4,7 @@ import logging
 from typing import Protocol
 
 from code_review_app.github.client import GitHubClientProtocol, ReviewCommentPlacementError
+from code_review_app.review.diff import DiffIndex
 from code_review_app.review.models import Finding
 
 
@@ -38,6 +39,7 @@ class GitHubReporter:
         pr_number: int,
         expected_head_sha: str,
         findings: list[Finding],
+        inline_locations: DiffIndex | None = None,
     ) -> list[str]:
         current_head_sha = self.github_client.get_pull_request_head_sha(repo_full_name, pr_number)
         if current_head_sha != expected_head_sha:
@@ -50,7 +52,7 @@ class GitHubReporter:
                 continue
             if self._is_duplicate(repo_full_name, pr_number, expected_head_sha, finding):
                 continue
-            if not self._is_inline_placeable(finding):
+            if not self._is_inline_placeable(finding, inline_locations):
                 summary_findings.append(finding)
                 continue
             try:
@@ -102,8 +104,14 @@ class GitHubReporter:
         )
 
     @staticmethod
-    def _is_inline_placeable(finding: Finding) -> bool:
-        return finding.file_path not in {"", "."} and finding.line > 0
+    def _is_inline_placeable(
+        finding: Finding, inline_locations: DiffIndex | None = None
+    ) -> bool:
+        if finding.file_path in {"", "."} or finding.line <= 0:
+            return False
+        if inline_locations is None:
+            return True
+        return inline_locations.has_right_line(finding.file_path, finding.line)
 
     @staticmethod
     def _summary_body(findings: list[Finding]) -> str:

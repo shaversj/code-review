@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Callable, Protocol
 
+from code_review_app.review.diff import DiffIndex
 from code_review_app.review.models import CheckResult, ReviewPipelineResult, Workspace
 from code_review_app.sandbox.checks import load_review_config
 from code_review_app.storage import Storage
@@ -29,7 +30,12 @@ class PipelineProtocol(Protocol):
 
 class ReporterProtocol(Protocol):
     def post_findings(
-        self, repo_full_name: str, pr_number: int, expected_head_sha: str, findings: list
+        self,
+        repo_full_name: str,
+        pr_number: int,
+        expected_head_sha: str,
+        findings: list,
+        inline_locations: DiffIndex | None = None,
     ) -> list[str]:
         raise NotImplementedError
 
@@ -73,11 +79,19 @@ class ReviewWorker:
             self.storage.save_leads(review_run_id, result.leads)
             self.storage.save_findings(review_run_id, result.findings)
             logger.info("posting review findings", extra={"review_run_id": review_run_id})
+            inline_locations = DiffIndex.from_unified_diff(workspace.diff)
+            logger.info(
+                "computed inline comment locations files=%s lines=%s",
+                inline_locations.file_count,
+                inline_locations.line_count,
+                extra={"review_run_id": review_run_id},
+            )
             posted_comment_ids = self.reporter.post_findings(
                 str(job["repo_full_name"]),
                 int(job["pr_number"]),
                 str(job["head_sha"]),
                 result.findings,
+                inline_locations,
             )
             self.storage.mark_findings_posted(review_run_id, posted_comment_ids)
             self.storage.update_review_run_status(
