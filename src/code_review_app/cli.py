@@ -38,6 +38,8 @@ def build_review_pipeline(
                 base_url=settings.model_base_url,
                 model=settings.model_name,
                 max_tokens=settings.model_max_tokens,
+                input_price_per_million_tokens=settings.model_input_price_per_million_tokens,
+                output_price_per_million_tokens=settings.model_output_price_per_million_tokens,
             )
         )
     return DeterministicReviewPipeline()

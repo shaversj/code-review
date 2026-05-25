@@ -68,7 +68,11 @@ MODEL_API_KEY=your-minimax-api-key
 MODEL_BASE_URL=https://api.minimax.io/anthropic
 MODEL_NAME=MiniMax-M2.7
 MODEL_MAX_TOKENS=4000
+MODEL_INPUT_PRICE_PER_MILLION_TOKENS=0.30
+MODEL_OUTPUT_PRICE_PER_MILLION_TOKENS=1.20
 ```
+
+The worker logs each model-backed review start and completion, including provider-reported input/output token counts and an estimated USD cost. The estimate uses the per-million token prices above, so update them if your provider pricing changes.
 
 The worker marks queued or running review runs older than `STALE_RUN_AFTER_MINUTES` as failed stale runs during startup. Set `STALE_RUN_AFTER_MINUTES=0` only for local cleanup.
 

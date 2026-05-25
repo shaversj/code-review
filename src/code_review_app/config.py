@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     model_base_url: str | None = None
     model_name: str = "MiniMax-M2.7"
     model_max_tokens: int = Field(default=4000, ge=256)
+    model_input_price_per_million_tokens: float = Field(default=0.30, ge=0)
+    model_output_price_per_million_tokens: float = Field(default=1.20, ge=0)
 
     @property
     def allowed_repo_set(self) -> set[str]:

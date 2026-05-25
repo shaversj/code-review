@@ -173,6 +173,8 @@ workspace diff + check results
 
 The model gateway receives the diff and outputs review data only. It must not create or choose shell commands.
 
+For operator visibility, the model gateway logs review start, response parsing, completion, provider-reported input/output token counts, and an estimated USD cost. Cost estimation uses configured per-million token prices and should be updated if provider pricing changes.
+
 ## Reporter Guardrails
 
 `GitHubReporter` verifies the current pull request head SHA before posting comments. If the PR head changed, it posts nothing.
@@ -207,6 +209,8 @@ Settings are read from environment variables or `.env`:
 - `MODEL_BASE_URL`
 - `MODEL_NAME`
 - `MODEL_MAX_TOKENS`
+- `MODEL_INPUT_PRICE_PER_MILLION_TOKENS`
+- `MODEL_OUTPUT_PRICE_PER_MILLION_TOKENS`
 
 For Docker Compose, app services use `AWS_ENDPOINT_URL=http://localstack:4566` and `SQS_QUEUE_URL=http://localstack:4566/000000000000/code-review-jobs`.
 

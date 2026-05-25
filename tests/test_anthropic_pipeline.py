@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from code_review_app.ai.anthropic import AnthropicReviewGateway
@@ -9,19 +10,20 @@ from code_review_app.review.pipeline import AnthropicReviewPipeline
 
 
 class FakeMessages:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, usage=None) -> None:
         self.text = text
+        self.usage = usage
         self.calls: list[dict] = []
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
         content = [type("TextBlock", (), {"type": "text", "text": self.text})()]
-        return type("Message", (), {"content": content})()
+        return type("Message", (), {"content": content, "usage": self.usage})()
 
 
 class FakeAnthropicClient:
-    def __init__(self, text: str) -> None:
-        self.messages = FakeMessages(text)
+    def __init__(self, text: str, usage=None) -> None:
+        self.messages = FakeMessages(text, usage=usage)
 
 
 def test_anthropic_gateway_requests_json_review_payload() -> None:
@@ -80,6 +82,28 @@ def test_anthropic_gateway_requests_json_review_payload() -> None:
     assert "Return only JSON" in call["system"]
     assert result.findings[0].title == "Bug"
     assert result.leads[0].suspicion == "Possible bug"
+
+
+def test_anthropic_gateway_logs_model_usage_and_estimated_cost(caplog) -> None:
+    usage = type("Usage", (), {"input_tokens": 1000, "output_tokens": 500})()
+    client = FakeAnthropicClient(json.dumps({"leads": [], "findings": []}), usage=usage)
+    gateway = AnthropicReviewGateway(
+        client=client,
+        base_url="https://api.minimax.io/anthropic",
+        model="MiniMax-M2.7",
+        max_tokens=500,
+        input_price_per_million_tokens=0.30,
+        output_price_per_million_tokens=1.20,
+    )
+
+    with caplog.at_level(logging.INFO):
+        gateway.review(Workspace(path=Path("."), base_sha="base", head_sha="head", diff="+bug"), [])
+
+    assert "starting model review" in caplog.text
+    assert "model review completed" in caplog.text
+    assert "input_tokens=1000" in caplog.text
+    assert "output_tokens=500" in caplog.text
+    assert "estimated_cost_usd=0.000900" in caplog.text
 
 
 def test_anthropic_pipeline_uses_gateway() -> None:

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from code_review_app.review.models import CheckResult, Finding, Lead, ReviewPipelineResult, Workspace
 
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are an AI code reviewer.
 Return only JSON with this exact shape:
@@ -41,27 +44,42 @@ class AnthropicReviewGateway:
         client: Any | None = None,
         api_key: str | None = None,
         base_url: str | None = None,
-        model: str = "claude-sonnet-4-5",
+        model: str = "MiniMax-M2.7",
         max_tokens: int = 4000,
+        input_price_per_million_tokens: float = 0.0,
+        output_price_per_million_tokens: float = 0.0,
     ) -> None:
         if client is None:
             from anthropic import Anthropic
 
             client = Anthropic(api_key=api_key, base_url=base_url)
         self.client = client
+        self.base_url = base_url
         self.model = model
         self.max_tokens = max_tokens
+        self.input_price_per_million_tokens = input_price_per_million_tokens
+        self.output_price_per_million_tokens = output_price_per_million_tokens
 
     def review(self, workspace: Workspace, checks: list[CheckResult]) -> ReviewPipelineResult:
+        user_prompt = self._build_user_prompt(workspace, checks)
+        logger.info(
+            "starting model review model=%s base_url=%s checks=%s prompt_chars=%s max_tokens=%s",
+            self.model,
+            self.base_url or "default",
+            len(checks),
+            len(user_prompt),
+            self.max_tokens,
+        )
         message = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
             temperature=0,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": self._build_user_prompt(workspace, checks)}],
+            messages=[{"role": "user", "content": user_prompt}],
         )
+        logger.info("parsing model review response model=%s", self.model)
         payload = json.loads(self._first_text_block(message))
-        return ReviewPipelineResult(
+        result = ReviewPipelineResult(
             leads=[
                 Lead(
                     file_path=str(item["file_path"]),
@@ -87,6 +105,19 @@ class AnthropicReviewGateway:
                 for item in payload.get("findings", [])
             ],
         )
+        input_tokens, output_tokens = self._usage_tokens(message)
+        estimated_cost_usd = self._estimated_cost_usd(input_tokens, output_tokens)
+        logger.info(
+            "model review completed model=%s input_tokens=%s output_tokens=%s "
+            "estimated_cost_usd=%.6f leads=%s findings=%s",
+            self.model,
+            input_tokens,
+            output_tokens,
+            estimated_cost_usd,
+            len(result.leads),
+            len(result.findings),
+        )
+        return result
 
     def _build_user_prompt(self, workspace: Workspace, checks: list[CheckResult]) -> str:
         check_payload = [
@@ -115,3 +146,22 @@ class AnthropicReviewGateway:
             if getattr(block, "type", None) == "text":
                 return str(block.text)
         raise ValueError("Anthropic response did not contain a text block")
+
+    @staticmethod
+    def _usage_tokens(message: Any) -> tuple[int, int]:
+        usage = getattr(message, "usage", None)
+        if usage is None:
+            return 0, 0
+        input_tokens = getattr(usage, "input_tokens", None)
+        if input_tokens is None:
+            input_tokens = getattr(usage, "prompt_tokens", 0)
+        output_tokens = getattr(usage, "output_tokens", None)
+        if output_tokens is None:
+            output_tokens = getattr(usage, "completion_tokens", 0)
+        return int(input_tokens or 0), int(output_tokens or 0)
+
+    def _estimated_cost_usd(self, input_tokens: int, output_tokens: int) -> float:
+        return (
+            (input_tokens / 1_000_000) * self.input_price_per_million_tokens
+            + (output_tokens / 1_000_000) * self.output_price_per_million_tokens
+        )

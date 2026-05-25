@@ -127,11 +127,15 @@ def test_build_review_pipeline_can_use_anthropic(tmp_path: Path) -> None:
             base_url: str | None,
             model: str,
             max_tokens: int,
+            input_price_per_million_tokens: float,
+            output_price_per_million_tokens: float,
         ) -> None:
             self.api_key = api_key
             self.base_url = base_url
             self.model = model
             self.max_tokens = max_tokens
+            self.input_price_per_million_tokens = input_price_per_million_tokens
+            self.output_price_per_million_tokens = output_price_per_million_tokens
 
     configured = Settings(
         database_path=tmp_path / "review.db",
@@ -145,6 +149,8 @@ def test_build_review_pipeline_can_use_anthropic(tmp_path: Path) -> None:
         model_base_url="https://api.minimax.io/anthropic",
         model_name="MiniMax-M2.7",
         model_max_tokens=321,
+        model_input_price_per_million_tokens=0.3,
+        model_output_price_per_million_tokens=1.2,
     )
 
     pipeline = build_review_pipeline(configured, gateway_factory=FakeGateway)
@@ -154,6 +160,8 @@ def test_build_review_pipeline_can_use_anthropic(tmp_path: Path) -> None:
     assert pipeline.gateway.base_url == "https://api.minimax.io/anthropic"
     assert pipeline.gateway.model == "MiniMax-M2.7"
     assert pipeline.gateway.max_tokens == 321
+    assert pipeline.gateway.input_price_per_million_tokens == 0.3
+    assert pipeline.gateway.output_price_per_million_tokens == 1.2
 
 
 def test_build_review_worker_marks_stale_incomplete_runs(tmp_path: Path) -> None:
