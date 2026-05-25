@@ -46,6 +46,17 @@ class Finding:
 
 
 @dataclass(frozen=True)
+class ModelUsage:
+    provider: str
+    model: str
+    base_url: str | None
+    input_tokens: int
+    output_tokens: int
+    estimated_cost_usd: float
+
+
+@dataclass(frozen=True)
 class ReviewPipelineResult:
     leads: list[Lead]
     findings: list[Finding]
+    model_usage: ModelUsage | None = None

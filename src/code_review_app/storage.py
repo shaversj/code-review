@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from code_review_app.review.models import CheckResult, Finding, Lead
+from code_review_app.review.models import CheckResult, Finding, Lead, ModelUsage
 
 
 class Storage:
@@ -81,6 +81,18 @@ class Storage:
                     confidence REAL NOT NULL,
                     status TEXT NOT NULL,
                     posted_comment_id TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS model_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    review_run_id INTEGER NOT NULL REFERENCES review_runs(id),
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    base_url TEXT,
+                    input_tokens INTEGER NOT NULL,
+                    output_tokens INTEGER NOT NULL,
+                    estimated_cost_usd REAL NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
                 """
             )
@@ -269,6 +281,28 @@ class Storage:
                 ids.append(int(cursor.lastrowid))
             return ids
 
+    def save_model_usage(self, review_run_id: int, usage: ModelUsage) -> int:
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO model_runs (
+                    review_run_id, provider, model, base_url,
+                    input_tokens, output_tokens, estimated_cost_usd
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    review_run_id,
+                    usage.provider,
+                    usage.model,
+                    usage.base_url,
+                    usage.input_tokens,
+                    usage.output_tokens,
+                    usage.estimated_cost_usd,
+                ),
+            )
+            return int(cursor.lastrowid)
+
     def mark_findings_posted(self, review_run_id: int, posted_comment_ids: list[str]) -> None:
         if not posted_comment_ids:
             return
@@ -316,7 +350,19 @@ class Storage:
                     (review_run_id,),
                 )
             ]
-        return {"check_runs": check_runs, "leads": leads, "findings": findings}
+            model_runs = [
+                dict(row)
+                for row in connection.execute(
+                    "SELECT * FROM model_runs WHERE review_run_id = ? ORDER BY id",
+                    (review_run_id,),
+                )
+            ]
+        return {
+            "check_runs": check_runs,
+            "leads": leads,
+            "findings": findings,
+            "model_runs": model_runs,
+        }
 
     def has_posted_finding(
         self,

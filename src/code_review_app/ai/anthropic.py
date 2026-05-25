@@ -4,7 +4,14 @@ import json
 import logging
 from typing import Any
 
-from code_review_app.review.models import CheckResult, Finding, Lead, ReviewPipelineResult, Workspace
+from code_review_app.review.models import (
+    CheckResult,
+    Finding,
+    Lead,
+    ModelUsage,
+    ReviewPipelineResult,
+    Workspace,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -48,6 +55,7 @@ class AnthropicReviewGateway:
         max_tokens: int = 4000,
         input_price_per_million_tokens: float = 0.0,
         output_price_per_million_tokens: float = 0.0,
+        provider: str = "anthropic-compatible",
     ) -> None:
         if client is None:
             from anthropic import Anthropic
@@ -59,6 +67,7 @@ class AnthropicReviewGateway:
         self.max_tokens = max_tokens
         self.input_price_per_million_tokens = input_price_per_million_tokens
         self.output_price_per_million_tokens = output_price_per_million_tokens
+        self.provider = provider
 
     def review(self, workspace: Workspace, checks: list[CheckResult]) -> ReviewPipelineResult:
         user_prompt = self._build_user_prompt(workspace, checks)
@@ -79,6 +88,8 @@ class AnthropicReviewGateway:
         )
         logger.info("parsing model review response model=%s", self.model)
         payload = self._parse_json_payload(self._first_text_block(message))
+        input_tokens, output_tokens = self._usage_tokens(message)
+        estimated_cost_usd = self._estimated_cost_usd(input_tokens, output_tokens)
         result = ReviewPipelineResult(
             leads=[
                 Lead(
@@ -104,9 +115,15 @@ class AnthropicReviewGateway:
                 )
                 for item in payload.get("findings", [])
             ],
+            model_usage=ModelUsage(
+                provider=self.provider,
+                model=self.model,
+                base_url=self.base_url,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                estimated_cost_usd=estimated_cost_usd,
+            ),
         )
-        input_tokens, output_tokens = self._usage_tokens(message)
-        estimated_cost_usd = self._estimated_cost_usd(input_tokens, output_tokens)
         logger.info(
             "model review completed model=%s input_tokens=%s output_tokens=%s "
             "estimated_cost_usd=%.6f leads=%s findings=%s",

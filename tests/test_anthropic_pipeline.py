@@ -82,6 +82,9 @@ def test_anthropic_gateway_requests_json_review_payload() -> None:
     assert "Return only JSON" in call["system"]
     assert result.findings[0].title == "Bug"
     assert result.leads[0].suspicion == "Possible bug"
+    assert result.model_usage is not None
+    assert result.model_usage.model == "MiniMax-M2.7"
+    assert result.model_usage.input_tokens == 0
 
 
 def test_anthropic_gateway_logs_model_usage_and_estimated_cost(caplog) -> None:
@@ -104,6 +107,15 @@ def test_anthropic_gateway_logs_model_usage_and_estimated_cost(caplog) -> None:
     assert "input_tokens=1000" in caplog.text
     assert "output_tokens=500" in caplog.text
     assert "estimated_cost_usd=0.000900" in caplog.text
+    result = gateway.review(
+        Workspace(path=Path("."), base_sha="base", head_sha="head", diff="+bug"), []
+    )
+    assert result.model_usage is not None
+    assert result.model_usage.provider == "anthropic-compatible"
+    assert result.model_usage.model == "MiniMax-M2.7"
+    assert result.model_usage.input_tokens == 1000
+    assert result.model_usage.output_tokens == 500
+    assert result.model_usage.estimated_cost_usd == 0.0009
 
 
 def test_anthropic_gateway_accepts_fenced_json_response() -> None:

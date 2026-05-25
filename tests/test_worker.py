@@ -1,6 +1,13 @@
 from pathlib import Path
 
-from code_review_app.review.models import CheckResult, Finding, Lead, ReviewPipelineResult, Workspace
+from code_review_app.review.models import (
+    CheckResult,
+    Finding,
+    Lead,
+    ModelUsage,
+    ReviewPipelineResult,
+    Workspace,
+)
 from code_review_app.review.worker import ReviewWorker
 from code_review_app.storage import Storage
 
@@ -66,6 +73,23 @@ class FakePipeline:
                     confidence=0.9,
                 )
             ],
+        )
+
+
+class FakeModelUsagePipeline(FakePipeline):
+    def run(self, workspace: Workspace, checks: list[CheckResult]) -> ReviewPipelineResult:
+        result = super().run(workspace, checks)
+        return ReviewPipelineResult(
+            leads=result.leads,
+            findings=result.findings,
+            model_usage=ModelUsage(
+                provider="anthropic-compatible",
+                model="MiniMax-M2.7",
+                base_url="https://api.minimax.io/anthropic",
+                input_tokens=1000,
+                output_tokens=500,
+                estimated_cost_usd=0.0009,
+            ),
         )
 
 
@@ -181,3 +205,32 @@ def test_worker_passes_diff_index_to_reporter(tmp_path: Path) -> None:
     assert reporter.inline_locations is not None
     assert reporter.inline_locations.has_right_line("app.py", 2)
     assert reporter.inline_locations.has_added_line("app.py", 2)
+
+
+def test_worker_persists_model_usage(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "review.db")
+    storage.initialize()
+    run = storage.create_review_run("owner/repo", 7, "base", "head", 42)
+    worker = ReviewWorker(
+        storage,
+        FakeCheckout(),
+        FakeChecks(),
+        FakeModelUsagePipeline(),
+        FakeReporter(),
+    )
+
+    worker.handle_job(
+        {
+            "review_run_id": run["id"],
+            "repo_full_name": "owner/repo",
+            "pr_number": 7,
+            "base_sha": "base",
+            "head_sha": "head",
+            "installation_id": 42,
+        }
+    )
+
+    artifacts = storage.get_review_artifacts(run["id"])
+    assert artifacts["model_runs"][0]["model"] == "MiniMax-M2.7"
+    assert artifacts["model_runs"][0]["input_tokens"] == 1000
+    assert artifacts["model_runs"][0]["estimated_cost_usd"] == 0.0009

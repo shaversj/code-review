@@ -78,6 +78,8 @@ class ReviewWorker:
             result = self.pipeline.run(workspace, check_results)
             self.storage.save_leads(review_run_id, result.leads)
             self.storage.save_findings(review_run_id, result.findings)
+            if result.model_usage is not None:
+                self.storage.save_model_usage(review_run_id, result.model_usage)
             logger.info("posting review findings", extra={"review_run_id": review_run_id})
             inline_locations = DiffIndex.from_unified_diff(workspace.diff)
             logger.info(

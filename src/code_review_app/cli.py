@@ -46,6 +46,7 @@ def build_review_pipeline(
                 max_tokens=settings.model_max_tokens,
                 input_price_per_million_tokens=settings.model_input_price_per_million_tokens,
                 output_price_per_million_tokens=settings.model_output_price_per_million_tokens,
+                provider=settings.review_pipeline_provider,
             )
         )
     logger.info("selected review pipeline provider=%s", settings.review_pipeline_provider)

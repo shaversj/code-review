@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from code_review_app.review.models import CheckResult, Finding, Lead
+from code_review_app.review.models import CheckResult, Finding, Lead, ModelUsage
 from code_review_app.storage import Storage
 
 
@@ -103,6 +103,31 @@ def test_storage_persists_review_artifacts_and_posted_comment_ids(tmp_path: Path
     assert artifacts["leads"][0]["suspicion"] == "Unhandled error"
     assert artifacts["findings"][0]["id"] == finding_ids[0]
     assert artifacts["findings"][0]["posted_comment_id"] == "comment-1"
+
+
+def test_storage_persists_model_usage(tmp_path: Path) -> None:
+    storage = Storage(tmp_path / "review.db")
+    storage.initialize()
+    run = storage.create_review_run("owner/repo", 12, "base", "head", 99)
+
+    storage.save_model_usage(
+        run["id"],
+        ModelUsage(
+            provider="anthropic-compatible",
+            model="MiniMax-M2.7",
+            base_url="https://api.minimax.io/anthropic",
+            input_tokens=1000,
+            output_tokens=500,
+            estimated_cost_usd=0.0009,
+        ),
+    )
+
+    artifacts = storage.get_review_artifacts(run["id"])
+    assert artifacts["model_runs"][0]["provider"] == "anthropic-compatible"
+    assert artifacts["model_runs"][0]["model"] == "MiniMax-M2.7"
+    assert artifacts["model_runs"][0]["input_tokens"] == 1000
+    assert artifacts["model_runs"][0]["output_tokens"] == 500
+    assert artifacts["model_runs"][0]["estimated_cost_usd"] == 0.0009
 
 
 def test_storage_detects_existing_posted_finding(tmp_path: Path) -> None:

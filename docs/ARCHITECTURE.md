@@ -84,7 +84,7 @@ The worker CLI receives SQS messages and calls `ReviewWorker.handle_job`:
 8. Run configured checks through the allowlisted command runner.
 9. Persist check results.
 10. Pass workspace and check results to the selected review pipeline.
-11. Persist leads and findings.
+11. Persist leads, findings, and model usage when the selected pipeline reports it.
 12. Build an index of added and right-side lines present in the pull request diff.
 13. Post findings through the reporter.
 14. Persist posted comment IDs.
@@ -106,10 +106,11 @@ The schema currently includes:
 
 - `review_runs`
 - `check_runs`
+- `model_runs`
 - `leads`
 - `findings`
 
-Review-run creation, lookup, stale marking, status updates, check result persistence, lead persistence, finding persistence, and posted comment ID persistence are implemented.
+Review-run creation, lookup, stale marking, status updates, check result persistence, model usage persistence, lead persistence, finding persistence, and posted comment ID persistence are implemented.
 
 SQLite is suitable for the current single-tenant local/prototype shape. Move to PostgreSQL if the service needs multiple app instances, high worker concurrency, or richer analytics.
 
@@ -175,7 +176,7 @@ workspace diff + check results
 
 The model gateway receives the diff and outputs review data only. It must not create or choose shell commands. The gateway expects JSON review data and tolerates common model formatting wrappers such as Markdown fenced JSON blocks before validating the payload shape.
 
-For operator visibility, the model gateway logs review start, response parsing, completion, provider-reported input/output token counts, and an estimated USD cost. Cost estimation uses configured per-million token prices and should be updated if provider pricing changes.
+For operator visibility, the model gateway logs review start, response parsing, completion, provider-reported input/output token counts, and an estimated USD cost. It also returns model usage data for persistence in `model_runs`. Cost estimation uses configured per-million token prices and should be updated if provider pricing changes.
 
 ## Reporter Guardrails
 
