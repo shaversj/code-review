@@ -67,6 +67,10 @@ class CheckRunner:
             except subprocess.CalledProcessError as exc:
                 exit_code = int(exc.returncode)
                 output = str(exc.stdout or exc)
+            except FileNotFoundError as exc:
+                exit_code = 127
+                missing = check.command[0] if check.command else str(exc)
+                output = f"Command not found: {missing}"
             duration_ms = int((time.monotonic() - started) * 1000)
             results.append(
                 CheckResult(
