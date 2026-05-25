@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from code_review_app.ai.anthropic import AnthropicReviewGateway
+from code_review_app.ai.anthropic import MAX_MODEL_FINDINGS, SYSTEM_PROMPT, AnthropicReviewGateway
 from code_review_app.review.models import CheckResult, Workspace
 from code_review_app.review.pipeline import AnthropicReviewPipeline
 
@@ -85,6 +85,49 @@ def test_anthropic_gateway_requests_json_review_payload() -> None:
     assert result.model_usage is not None
     assert result.model_usage.model == "MiniMax-M2.7"
     assert result.model_usage.input_tokens == 0
+
+
+def test_anthropic_prompt_asks_for_fewer_high_confidence_findings() -> None:
+    assert f"At most {MAX_MODEL_FINDINGS} findings" in SYSTEM_PROMPT
+    assert "confidence >= 0.80" in SYSTEM_PROMPT
+    assert "Do not restate raw check failures" in SYSTEM_PROMPT
+
+
+def test_anthropic_gateway_filters_and_caps_model_findings() -> None:
+    findings = []
+    for index in range(MAX_MODEL_FINDINGS + 2):
+        findings.append(
+            {
+                "file_path": "app.py",
+                "line": index + 1,
+                "severity": "medium",
+                "title": f"Issue {index}",
+                "behavior_at_risk": "Risk",
+                "evidence": "Evidence",
+                "suggested_action": "Fix",
+                "confidence": 0.9,
+            }
+        )
+    findings.append(
+        {
+            "file_path": "app.py",
+            "line": 99,
+            "severity": "medium",
+            "title": "Weak issue",
+            "behavior_at_risk": "Risk",
+            "evidence": "Evidence",
+            "suggested_action": "Fix",
+            "confidence": 0.2,
+        }
+    )
+    client = FakeAnthropicClient(json.dumps({"leads": [], "findings": findings}))
+
+    result = AnthropicReviewGateway(client=client).review(
+        Workspace(path=Path("."), base_sha="base", head_sha="head", diff="+bug"), []
+    )
+
+    assert len(result.findings) == MAX_MODEL_FINDINGS
+    assert "Weak issue" not in {finding.title for finding in result.findings}
 
 
 def test_anthropic_gateway_logs_model_usage_and_estimated_cost(caplog) -> None:

@@ -15,6 +15,8 @@ from code_review_app.review.models import (
 
 
 logger = logging.getLogger(__name__)
+MAX_MODEL_FINDINGS = 5
+MIN_MODEL_CONFIDENCE = 0.8
 DEFAULT_SUGGESTED_CONTEXT = "No suggested context provided by model."
 DEFAULT_BEHAVIOR_AT_RISK = "The model did not provide behavior-at-risk details."
 DEFAULT_SUGGESTED_ACTION = "Inspect the cited code and update if needed."
@@ -45,7 +47,12 @@ Return only JSON with this exact shape:
     }
   ]
 }
-Only report actionable findings with concrete evidence. Do not invent shell commands."""
+Only report actionable findings with concrete evidence.
+At most 5 findings.
+Only include findings with confidence >= 0.80.
+Prioritize correctness, security, data loss, privacy, API contract, and test regressions.
+Do not restate raw check failures unless you can tie the failure to a specific changed line or behavior.
+Do not invent shell commands."""
 
 
 class AnthropicReviewGateway:
@@ -139,6 +146,9 @@ class AnthropicReviewGateway:
     def _parse_findings(cls, payload: dict[str, Any]) -> list[Finding]:
         findings: list[Finding] = []
         for item in cls._payload_items(payload, "findings"):
+            confidence = cls._confidence_field(item)
+            if confidence < MIN_MODEL_CONFIDENCE:
+                continue
             findings.append(
                 Finding(
                     file_path=cls._string_field(item, "file_path", "."),
@@ -152,10 +162,10 @@ class AnthropicReviewGateway:
                     suggested_action=cls._string_field(
                         item, "suggested_action", DEFAULT_SUGGESTED_ACTION
                     ),
-                    confidence=cls._confidence_field(item),
+                    confidence=confidence,
                 )
             )
-        return findings
+        return findings[:MAX_MODEL_FINDINGS]
 
     def _build_user_prompt(self, workspace: Workspace, checks: list[CheckResult]) -> str:
         check_payload = [

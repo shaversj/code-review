@@ -1,15 +1,19 @@
 from code_review_app.github.client import ReviewCommentPlacementError
 from code_review_app.review.diff import DiffIndex
 from code_review_app.review.models import Finding
-from code_review_app.review.reporter import GitHubReporter
+from code_review_app.review.reporter import BOT_REVIEW_MARKER, GitHubReporter
 
 
 class FakeGitHubClient:
     def __init__(
-        self, head_sha: str, rejected_inline_titles: set[str] | None = None
+        self,
+        head_sha: str,
+        rejected_inline_titles: set[str] | None = None,
+        existing_bot_review: bool = False,
     ) -> None:
         self.head_sha = head_sha
         self.rejected_inline_titles = rejected_inline_titles or set()
+        self.existing_bot_review = existing_bot_review
         self.comments: list[dict] = []
         self.summary_comments: list[dict] = []
 
@@ -38,6 +42,9 @@ class FakeGitHubClient:
             {"repo": repo_full_name, "pr": pr_number, "head_sha": head_sha, "body": body}
         )
         return "summary-1"
+
+    def has_existing_bot_review(self, repo_full_name: str, pr_number: int, head_sha: str) -> bool:
+        return self.existing_bot_review
 
 
 class FakeDuplicateStore:
@@ -121,6 +128,17 @@ def test_reporter_posts_when_head_sha_matches() -> None:
     assert client.comments[0]["title"] == "Issue"
 
 
+def test_reporter_skips_when_bot_review_already_exists_for_head() -> None:
+    client = FakeGitHubClient("head", existing_bot_review=True)
+    reporter = GitHubReporter(client)
+
+    posted = reporter.post_findings("owner/repo", 5, "head", [finding()])
+
+    assert posted == []
+    assert client.comments == []
+    assert client.summary_comments == []
+
+
 def test_reporter_skips_when_head_sha_is_stale() -> None:
     client = FakeGitHubClient("new-head")
     reporter = GitHubReporter(client)
@@ -152,6 +170,7 @@ def test_reporter_posts_summary_when_inline_location_is_not_placeable() -> None:
     assert client.comments == []
     assert client.summary_comments[0]["head_sha"] == "head"
     assert "Issue" in client.summary_comments[0]["body"]
+    assert BOT_REVIEW_MARKER in client.summary_comments[0]["body"]
 
 
 def test_reporter_groups_multiple_non_inline_findings_into_one_summary() -> None:

@@ -26,6 +26,9 @@ class QueueProtocol(Protocol):
     def delete_message(self, receipt_handle: str) -> None:
         raise NotImplementedError
 
+    def receive_count(self, message: dict) -> int:
+        raise NotImplementedError
+
 
 def build_review_pipeline(
     settings: Settings,
@@ -79,6 +82,12 @@ def process_message(
     worker_factory: Callable = build_review_worker,
 ) -> None:
     job = json.loads(message["Body"])
+    receive_count = queue.receive_count(message)
+    logger.info(
+        "processing review message sqs_receive_count=%s",
+        receive_count,
+        extra={"review_run_id": job["review_run_id"]},
+    )
     logger.info("creating GitHub installation token", extra={"review_run_id": job["review_run_id"]})
     auth = auth_factory(settings.github_app_id, settings.github_private_key_path)
     installation_token = auth.create_installation_token(int(job["installation_id"])).token

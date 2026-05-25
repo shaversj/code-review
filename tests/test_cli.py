@@ -32,6 +32,10 @@ class FakeQueue:
     def delete_message(self, receipt_handle: str) -> None:
         self.deleted.append(receipt_handle)
 
+    @staticmethod
+    def receive_count(message: dict) -> int:
+        return int(message.get("Attributes", {}).get("ApproximateReceiveCount", 1))
+
 
 class FakeWorker:
     def __init__(self, should_fail: bool = False) -> None:
@@ -69,6 +73,7 @@ def message() -> dict:
             }
         ),
         "ReceiptHandle": "receipt-1",
+        "Attributes": {"ApproximateReceiveCount": "3"},
     }
 
 
@@ -97,6 +102,21 @@ def test_process_message_builds_worker_with_installation_token_and_deletes_after
     assert built["repo_url"] == "clone:owner/repo:token-42"
     assert worker.job is not None
     assert queue.deleted == ["receipt-1"]
+
+
+def test_process_message_logs_sqs_receive_count(tmp_path: Path, caplog) -> None:
+    queue = FakeQueue()
+
+    with caplog.at_level(logging.INFO):
+        process_message(
+            message(),
+            settings(tmp_path),
+            queue,
+            auth_factory=FakeAuth,
+            worker_factory=lambda settings, github_token, repo_url_builder: FakeWorker(),
+        )
+
+    assert "sqs_receive_count=3" in caplog.text
 
 
 def test_process_message_leaves_message_for_redelivery_when_worker_fails(tmp_path: Path) -> None:

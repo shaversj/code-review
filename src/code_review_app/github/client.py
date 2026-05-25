@@ -7,6 +7,9 @@ import httpx
 from code_review_app.review.models import Finding
 
 
+BOT_REVIEW_MARKER = "<!-- code-review-bot -->"
+
+
 class ReviewCommentPlacementError(Exception):
     """Raised when GitHub rejects an inline PR review comment location."""
 
@@ -27,6 +30,9 @@ class GitHubClientProtocol(Protocol):
     def create_pull_request_review(
         self, repo_full_name: str, pr_number: int, head_sha: str, body: str
     ) -> str:
+        raise NotImplementedError
+
+    def has_existing_bot_review(self, repo_full_name: str, pr_number: int, head_sha: str) -> bool:
         raise NotImplementedError
 
 
@@ -94,3 +100,17 @@ class GitHubClient:
         )
         response.raise_for_status()
         return str(response.json()["id"])
+
+    def has_existing_bot_review(self, repo_full_name: str, pr_number: int, head_sha: str) -> bool:
+        response = httpx.get(
+            f"https://api.github.com/repos/{repo_full_name}/pulls/{pr_number}/reviews",
+            headers=self._headers(),
+            timeout=20,
+        )
+        response.raise_for_status()
+        for review in response.json():
+            if str(review.get("commit_id")) != head_sha:
+                continue
+            if BOT_REVIEW_MARKER in str(review.get("body") or ""):
+                return True
+        return False

@@ -9,6 +9,7 @@ from code_review_app.review.models import Finding
 
 
 logger = logging.getLogger(__name__)
+BOT_REVIEW_MARKER = "<!-- code-review-bot -->"
 
 
 class DuplicateStore(Protocol):
@@ -21,6 +22,11 @@ class DuplicateStore(Protocol):
         line: int,
         title: str,
     ) -> bool:
+        raise NotImplementedError
+
+
+class BotReviewStore(Protocol):
+    def has_existing_bot_review(self, repo_full_name: str, pr_number: int, head_sha: str) -> bool:
         raise NotImplementedError
 
 
@@ -43,6 +49,14 @@ class GitHubReporter:
     ) -> list[str]:
         current_head_sha = self.github_client.get_pull_request_head_sha(repo_full_name, pr_number)
         if current_head_sha != expected_head_sha:
+            return []
+        if self.github_client.has_existing_bot_review(repo_full_name, pr_number, expected_head_sha):
+            logger.info(
+                "skipping review posting because bot review already exists repo=%s pr=%s head=%s",
+                repo_full_name,
+                pr_number,
+                expected_head_sha,
+            )
             return []
 
         posted_ids: list[str] = []
@@ -115,7 +129,7 @@ class GitHubReporter:
 
     @staticmethod
     def _summary_body(findings: list[Finding]) -> str:
-        lines = ["Review findings could not be placed inline:"]
+        lines = [BOT_REVIEW_MARKER, "", "Review findings could not be placed inline:"]
         for finding in findings:
             lines.extend(
                 [

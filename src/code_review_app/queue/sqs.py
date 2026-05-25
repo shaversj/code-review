@@ -52,9 +52,18 @@ class SqsQueue:
             QueueUrl=self.queue_url,
             MaxNumberOfMessages=max_messages,
             WaitTimeSeconds=wait_time_seconds,
+            MessageSystemAttributeNames=["All"],
             MessageAttributeNames=["All"],
         )
         return list(response.get("Messages", []))
+
+    @staticmethod
+    def receive_count(message: dict[str, Any]) -> int:
+        attributes = message.get("Attributes", {})
+        try:
+            return int(attributes.get("ApproximateReceiveCount", 1))
+        except (TypeError, ValueError):
+            return 1
 
     def delete_message(self, receipt_handle: str) -> None:
         self.client.delete_message(QueueUrl=self.queue_url, ReceiptHandle=receipt_handle)

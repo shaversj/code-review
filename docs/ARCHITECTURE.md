@@ -28,6 +28,7 @@ docker compose
 ```
 
 LocalStack creates the `code-review-jobs` queue during startup from `localstack/init/ready.d/create-sqs.sh`.
+LocalStack also creates `code-review-jobs-dlq` and attaches it as the dead-letter queue with `maxReceiveCount=5`.
 The LocalStack service pins `localstack/localstack:4.11.1` and sets `ACTIVATE_PRO=0` because the local runtime only needs community SQS emulation. The 2026 `latest` image requires a LocalStack auth token.
 
 ## Source Layout
@@ -69,6 +70,8 @@ src/code_review_app/
 7. `SqsQueue` enqueues a small JSON job containing repo, PR, base SHA, head SHA, installation ID, and review run ID.
 
 The API request returns after enqueueing. Review execution is intentionally outside the webhook request path.
+
+`GET /review-runs/{id}` returns the persisted review run, checks, model runs, leads, and findings for local inspection.
 
 ## Worker Flow
 
@@ -130,8 +133,12 @@ SQS delivery is at-least-once. Worker behavior must remain idempotent using `Rev
 Local queue settings:
 
 - queue name: `code-review-jobs`
+- dead-letter queue name: `code-review-jobs-dlq`
 - visibility timeout: `900`
 - long polling wait time: `20`
+- redrive max receive count: `5`
+
+Workers request SQS system attributes and log `ApproximateReceiveCount` for retry visibility. Failed messages are not deleted, allowing SQS to retry and eventually redrive to the DLQ when configured.
 
 ## Sandbox And Checks
 
@@ -164,7 +171,7 @@ Check output is persisted in SQLite. GitHub-facing findings show only the first 
 
 The default pipeline is deterministic. `DeterministicReviewPipeline` turns failed or timed-out configured checks into medium-severity findings.
 
-The optional model-backed path is selected with `REVIEW_PIPELINE_PROVIDER=anthropic-compatible`. `AnthropicReviewGateway` uses an Anthropic-compatible Messages API and asks for a JSON object containing leads and findings. The default compatible target is MiniMax:
+The optional model-backed path is selected with `REVIEW_PIPELINE_PROVIDER=anthropic-compatible`. `AnthropicReviewGateway` uses an Anthropic-compatible Messages API and asks for a JSON object containing leads and findings. The prompt asks for at most five findings, confidence `>= 0.80`, concrete changed-code evidence, and avoids restating raw check failures without a changed-line behavioral tie. The default compatible target is MiniMax:
 
 ```text
 workspace diff + check results
@@ -181,6 +188,7 @@ For operator visibility, the model gateway logs review start, response parsing, 
 ## Reporter Guardrails
 
 `GitHubReporter` verifies the current pull request head SHA before posting comments. If the PR head changed, it posts nothing.
+Summary reviews include a hidden `<!-- code-review-bot -->` marker. If a marked bot review already exists for the same PR head SHA, the reporter skips posting another review for that head to reduce repeated-test noise.
 
 Current behavior:
 

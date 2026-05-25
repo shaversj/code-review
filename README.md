@@ -43,6 +43,12 @@ Check the API:
 curl http://localhost:8000/healthz
 ```
 
+Inspect a completed review run, including checks, findings, leads, and model usage:
+
+```bash
+curl http://localhost:8000/review-runs/1
+```
+
 Check the LocalStack queue:
 
 ```bash
@@ -51,6 +57,8 @@ aws --endpoint-url=http://localhost:4566 sqs get-queue-url \
   --query QueueUrl \
   --output text
 ```
+
+LocalStack also creates a `code-review-jobs-dlq` queue and attaches it to `code-review-jobs` with `maxReceiveCount=5`. Messages that fail repeatedly are redriven there by SQS-compatible queue policy.
 
 View the local SQLite database in a browser after the Docker Compose stack has created the `code-review_app-data` volume:
 
