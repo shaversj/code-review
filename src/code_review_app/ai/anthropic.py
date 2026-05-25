@@ -15,6 +15,9 @@ from code_review_app.review.models import (
 
 
 logger = logging.getLogger(__name__)
+DEFAULT_SUGGESTED_CONTEXT = "No suggested context provided by model."
+DEFAULT_BEHAVIOR_AT_RISK = "The model did not provide behavior-at-risk details."
+DEFAULT_SUGGESTED_ACTION = "Inspect the cited code and update if needed."
 
 SYSTEM_PROMPT = """You are an AI code reviewer.
 Return only JSON with this exact shape:
@@ -91,30 +94,8 @@ class AnthropicReviewGateway:
         input_tokens, output_tokens = self._usage_tokens(message)
         estimated_cost_usd = self._estimated_cost_usd(input_tokens, output_tokens)
         result = ReviewPipelineResult(
-            leads=[
-                Lead(
-                    file_path=str(item["file_path"]),
-                    line=int(item["line"]),
-                    suspicion=str(item["suspicion"]),
-                    related_rule_ids=[str(rule) for rule in item.get("related_rule_ids", [])],
-                    suggested_context=str(item["suggested_context"]),
-                    status=str(item.get("status", "verified")),
-                )
-                for item in payload.get("leads", [])
-            ],
-            findings=[
-                Finding(
-                    file_path=str(item["file_path"]),
-                    line=int(item["line"]),
-                    severity=str(item["severity"]),
-                    title=str(item["title"]),
-                    behavior_at_risk=str(item["behavior_at_risk"]),
-                    evidence=str(item["evidence"]),
-                    suggested_action=str(item["suggested_action"]),
-                    confidence=float(item["confidence"]),
-                )
-                for item in payload.get("findings", [])
-            ],
+            leads=self._parse_leads(payload),
+            findings=self._parse_findings(payload),
             model_usage=ModelUsage(
                 provider=self.provider,
                 model=self.model,
@@ -135,6 +116,46 @@ class AnthropicReviewGateway:
             len(result.findings),
         )
         return result
+
+    @classmethod
+    def _parse_leads(cls, payload: dict[str, Any]) -> list[Lead]:
+        leads: list[Lead] = []
+        for item in cls._payload_items(payload, "leads"):
+            leads.append(
+                Lead(
+                    file_path=cls._string_field(item, "file_path", "."),
+                    line=cls._int_field(item, "line", 1),
+                    suspicion=cls._string_field(item, "suspicion", "Potential issue"),
+                    related_rule_ids=cls._string_list_field(item, "related_rule_ids"),
+                    suggested_context=cls._string_field(
+                        item, "suggested_context", DEFAULT_SUGGESTED_CONTEXT
+                    ),
+                    status=cls._string_field(item, "status", "verified"),
+                )
+            )
+        return leads
+
+    @classmethod
+    def _parse_findings(cls, payload: dict[str, Any]) -> list[Finding]:
+        findings: list[Finding] = []
+        for item in cls._payload_items(payload, "findings"):
+            findings.append(
+                Finding(
+                    file_path=cls._string_field(item, "file_path", "."),
+                    line=cls._int_field(item, "line", 1),
+                    severity=cls._severity_field(item),
+                    title=cls._string_field(item, "title", "Model review finding"),
+                    behavior_at_risk=cls._string_field(
+                        item, "behavior_at_risk", DEFAULT_BEHAVIOR_AT_RISK
+                    ),
+                    evidence=cls._string_field(item, "evidence", "No evidence provided by model."),
+                    suggested_action=cls._string_field(
+                        item, "suggested_action", DEFAULT_SUGGESTED_ACTION
+                    ),
+                    confidence=cls._confidence_field(item),
+                )
+            )
+        return findings
 
     def _build_user_prompt(self, workspace: Workspace, checks: list[CheckResult]) -> str:
         check_payload = [
@@ -174,6 +195,60 @@ class AnthropicReviewGateway:
         if not isinstance(payload, dict):
             raise ValueError("Anthropic response JSON payload must be an object")
         return payload
+
+    @staticmethod
+    def _payload_items(payload: dict[str, Any], key: str) -> list[dict[str, Any]]:
+        raw_items = payload.get(key, [])
+        if not isinstance(raw_items, list):
+            logger.warning("model review response field was not a list field=%s", key)
+            return []
+        items: list[dict[str, Any]] = []
+        for index, item in enumerate(raw_items):
+            if isinstance(item, dict):
+                items.append(item)
+            else:
+                logger.warning(
+                    "skipping non-object model review item field=%s index=%s", key, index
+                )
+        return items
+
+    @staticmethod
+    def _string_field(item: dict[str, Any], key: str, default: str) -> str:
+        value = item.get(key)
+        if value is None:
+            return default
+        text = str(value).strip()
+        return text or default
+
+    @staticmethod
+    def _string_list_field(item: dict[str, Any], key: str) -> list[str]:
+        value = item.get(key, [])
+        if not isinstance(value, list):
+            return []
+        return [str(entry) for entry in value]
+
+    @staticmethod
+    def _int_field(item: dict[str, Any], key: str, default: int) -> int:
+        value = item.get(key)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _severity_field(cls, item: dict[str, Any]) -> str:
+        severity = cls._string_field(item, "severity", "medium").lower()
+        if severity not in {"low", "medium", "high"}:
+            return "medium"
+        return severity
+
+    @staticmethod
+    def _confidence_field(item: dict[str, Any]) -> float:
+        try:
+            confidence = float(item.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+        return min(max(confidence, 0.0), 1.0)
 
     @staticmethod
     def _strip_markdown_fence(text: str) -> str:

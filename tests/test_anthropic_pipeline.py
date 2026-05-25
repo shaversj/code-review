@@ -149,6 +149,46 @@ def test_anthropic_gateway_accepts_fenced_json_response() -> None:
     assert result.findings[0].title == "Broken auth"
 
 
+def test_anthropic_gateway_normalizes_partial_model_items() -> None:
+    client = FakeAnthropicClient(
+        json.dumps(
+            {
+                "leads": [
+                    {
+                        "file_path": "app.py",
+                        "line": "7",
+                        "suspicion": "Check this",
+                    }
+                ],
+                "findings": [
+                    {
+                        "file_path": "app.py",
+                        "line": "7",
+                        "severity": "medium",
+                        "title": "Partial issue",
+                        "evidence": "The model returned partial data.",
+                        "confidence": "0.82",
+                    }
+                ],
+            }
+        )
+    )
+    gateway = AnthropicReviewGateway(client=client)
+
+    result = gateway.review(
+        Workspace(path=Path("."), base_sha="base", head_sha="head", diff="+bug"), []
+    )
+
+    assert result.leads[0].line == 7
+    assert result.leads[0].suggested_context == "No suggested context provided by model."
+    assert result.findings[0].line == 7
+    assert result.findings[0].behavior_at_risk == (
+        "The model did not provide behavior-at-risk details."
+    )
+    assert result.findings[0].suggested_action == "Inspect the cited code and update if needed."
+    assert result.findings[0].confidence == 0.82
+
+
 def test_anthropic_pipeline_uses_gateway() -> None:
     class FakeGateway:
         def review(self, workspace, checks):
