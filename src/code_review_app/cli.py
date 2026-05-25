@@ -32,6 +32,12 @@ def build_review_pipeline(
     gateway_factory: Callable = AnthropicReviewGateway,
 ):
     if settings.review_pipeline_provider in {"anthropic", "anthropic-compatible"}:
+        logger.info(
+            "selected review pipeline provider=%s model=%s base_url=%s",
+            settings.review_pipeline_provider,
+            settings.model_name,
+            settings.model_base_url or "default",
+        )
         return AnthropicReviewPipeline(
             gateway_factory(
                 api_key=settings.model_api_key,
@@ -42,6 +48,7 @@ def build_review_pipeline(
                 output_price_per_million_tokens=settings.model_output_price_per_million_tokens,
             )
         )
+    logger.info("selected review pipeline provider=%s", settings.review_pipeline_provider)
     return DeterministicReviewPipeline()
 
 

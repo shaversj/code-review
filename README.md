@@ -74,6 +74,8 @@ MODEL_OUTPUT_PRICE_PER_MILLION_TOKENS=1.20
 
 The worker logs each model-backed review start and completion, including provider-reported input/output token counts and an estimated USD cost. The estimate uses the per-million token prices above, so update them if your provider pricing changes.
 
+If the worker logs `selected review pipeline provider=deterministic`, the AI gateway is disabled for that run and no model/token logs will appear. Set `REVIEW_PIPELINE_PROVIDER=anthropic-compatible` and restart the worker to enable the model-backed path.
+
 The worker marks queued or running review runs older than `STALE_RUN_AFTER_MINUTES` as failed stale runs during startup. Set `STALE_RUN_AFTER_MINUTES=0` only for local cleanup.
 
 ## Direct Local Setup

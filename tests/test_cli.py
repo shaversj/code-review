@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -115,11 +116,19 @@ def test_process_message_leaves_message_for_redelivery_when_worker_fails(tmp_pat
     assert queue.deleted == []
 
 
-def test_build_review_pipeline_defaults_to_deterministic(tmp_path: Path) -> None:
-    assert isinstance(build_review_pipeline(settings(tmp_path)), DeterministicReviewPipeline)
+def test_build_review_pipeline_defaults_to_deterministic(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.INFO):
+        pipeline = build_review_pipeline(settings(tmp_path))
+
+    assert isinstance(pipeline, DeterministicReviewPipeline)
+    assert "selected review pipeline provider=deterministic" in caplog.text
 
 
-def test_build_review_pipeline_can_use_anthropic(tmp_path: Path) -> None:
+def test_build_review_pipeline_can_use_anthropic(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     class FakeGateway:
         def __init__(
             self,
@@ -153,7 +162,8 @@ def test_build_review_pipeline_can_use_anthropic(tmp_path: Path) -> None:
         model_output_price_per_million_tokens=1.2,
     )
 
-    pipeline = build_review_pipeline(configured, gateway_factory=FakeGateway)
+    with caplog.at_level(logging.INFO):
+        pipeline = build_review_pipeline(configured, gateway_factory=FakeGateway)
 
     assert isinstance(pipeline, AnthropicReviewPipeline)
     assert pipeline.gateway.api_key == "minimax-key"
@@ -162,6 +172,8 @@ def test_build_review_pipeline_can_use_anthropic(tmp_path: Path) -> None:
     assert pipeline.gateway.max_tokens == 321
     assert pipeline.gateway.input_price_per_million_tokens == 0.3
     assert pipeline.gateway.output_price_per_million_tokens == 1.2
+    assert "selected review pipeline provider=anthropic-compatible" in caplog.text
+    assert "model=MiniMax-M2.7" in caplog.text
 
 
 def test_build_review_worker_marks_stale_incomplete_runs(tmp_path: Path) -> None:
