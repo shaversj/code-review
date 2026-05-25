@@ -52,6 +52,19 @@ aws --endpoint-url=http://localhost:4566 sqs get-queue-url \
   --output text
 ```
 
+View the local SQLite database in a browser after the Docker Compose stack has created the `code-review_app-data` volume:
+
+```bash
+docker run --rm -it \
+  --network code-review_default \
+  -p 8082:8080 \
+  -v code-review_app-data:/data \
+  coleifer/sqlite-web \
+  sqlite_web --host 0.0.0.0 /data/code-review.db
+```
+
+Then open `http://localhost:8082`.
+
 Override local defaults by exporting environment variables before `docker compose up`:
 
 ```bash
