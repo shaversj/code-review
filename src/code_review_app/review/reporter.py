@@ -40,20 +40,14 @@ class GitHubReporter:
             return []
 
         posted_ids: list[str] = []
+        summary_findings: list[Finding] = []
         for finding in findings:
             if finding.confidence < 0.75:
                 continue
             if self._is_duplicate(repo_full_name, pr_number, expected_head_sha, finding):
                 continue
             if not self._is_inline_placeable(finding):
-                posted_ids.append(
-                    self.github_client.create_pull_request_review(
-                        repo_full_name,
-                        pr_number,
-                        expected_head_sha,
-                        self._summary_body(finding),
-                    )
-                )
+                summary_findings.append(finding)
                 continue
             posted_ids.append(
                 self.github_client.create_review_comment(
@@ -61,6 +55,15 @@ class GitHubReporter:
                     pr_number,
                     expected_head_sha,
                     finding,
+                )
+            )
+        if summary_findings:
+            posted_ids.append(
+                self.github_client.create_pull_request_review(
+                    repo_full_name,
+                    pr_number,
+                    expected_head_sha,
+                    self._summary_body(summary_findings),
                 )
             )
         return posted_ids
@@ -88,10 +91,16 @@ class GitHubReporter:
         return finding.file_path not in {"", "."} and finding.line > 0
 
     @staticmethod
-    def _summary_body(finding: Finding) -> str:
-        return (
-            f"**{finding.severity.upper()}: {finding.title}**\n\n"
-            f"{finding.behavior_at_risk}\n\n"
-            f"Evidence: {finding.evidence}\n\n"
-            f"Suggested action: {finding.suggested_action}"
-        )
+    def _summary_body(findings: list[Finding]) -> str:
+        lines = ["Configured review checks found issues that could not be placed inline:"]
+        for finding in findings:
+            lines.extend(
+                [
+                    "",
+                    f"- **{finding.severity.upper()}: {finding.title}**",
+                    f"  - Risk: {finding.behavior_at_risk}",
+                    f"  - Evidence: {finding.evidence}",
+                    f"  - Suggested action: {finding.suggested_action}",
+                ]
+            )
+        return "\n".join(lines)

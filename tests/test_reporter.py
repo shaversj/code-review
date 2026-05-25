@@ -62,6 +62,20 @@ def finding() -> Finding:
     )
 
 
+def non_inline_finding(title: str) -> Finding:
+    item = finding()
+    return type(item)(
+        file_path=".",
+        line=1,
+        severity=item.severity,
+        title=title,
+        behavior_at_risk=item.behavior_at_risk,
+        evidence=item.evidence,
+        suggested_action=item.suggested_action,
+        confidence=item.confidence,
+    )
+
+
 def test_reporter_posts_when_head_sha_matches() -> None:
     client = FakeGitHubClient("head")
     reporter = GitHubReporter(client)
@@ -95,17 +109,7 @@ def test_reporter_skips_duplicate_findings() -> None:
 def test_reporter_posts_summary_when_inline_location_is_not_placeable() -> None:
     client = FakeGitHubClient("head")
     reporter = GitHubReporter(client)
-    item = finding()
-    item = type(item)(
-        file_path=".",
-        line=1,
-        severity=item.severity,
-        title=item.title,
-        behavior_at_risk=item.behavior_at_risk,
-        evidence=item.evidence,
-        suggested_action=item.suggested_action,
-        confidence=item.confidence,
-    )
+    item = non_inline_finding("Issue")
 
     posted = reporter.post_findings("owner/repo", 5, "head", [item])
 
@@ -113,3 +117,21 @@ def test_reporter_posts_summary_when_inline_location_is_not_placeable() -> None:
     assert client.comments == []
     assert client.summary_comments[0]["head_sha"] == "head"
     assert "Issue" in client.summary_comments[0]["body"]
+
+
+def test_reporter_groups_multiple_non_inline_findings_into_one_summary() -> None:
+    client = FakeGitHubClient("head")
+    reporter = GitHubReporter(client)
+
+    posted = reporter.post_findings(
+        "owner/repo",
+        5,
+        "head",
+        [non_inline_finding("First issue"), non_inline_finding("Second issue")],
+    )
+
+    assert posted == ["summary-1"]
+    assert len(client.summary_comments) == 1
+    body = client.summary_comments[0]["body"]
+    assert "First issue" in body
+    assert "Second issue" in body
