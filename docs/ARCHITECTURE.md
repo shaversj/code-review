@@ -155,6 +155,8 @@ Model output must not create or choose shell commands. Future model stages may r
 
 The Docker app image includes Python, git, Node.js 24, and npm for common local checks. Missing executables are recorded as failed check results with exit code `127` instead of crashing the worker.
 
+Check output is persisted in SQLite. GitHub-facing findings show only the first few meaningful output lines and point operators to stored artifacts for the full log.
+
 ## Review Pipeline
 
 The default pipeline is deterministic. `DeterministicReviewPipeline` turns failed or timed-out configured checks into medium-severity findings.
