@@ -1,3 +1,5 @@
+x-app-image: &app-image code-review-app:local
+
 services:
   localstack:
     image: localstack/localstack:4.11.1
@@ -21,6 +23,7 @@ services:
       retries: 20
 
   api:
+    image: *app-image
     build:
       context: .
     command: >
@@ -57,8 +60,7 @@ services:
         condition: service_healthy
 
   worker:
-    build:
-      context: .
+    image: *app-image
     command: uv run code-review-worker
     environment:
       <<: *app-environment

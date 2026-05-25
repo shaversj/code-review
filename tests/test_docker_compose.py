@@ -8,7 +8,9 @@ def test_compose_defines_local_runtime_services() -> None:
 
     assert set(compose["services"]) == {"api", "worker", "localstack"}
     assert compose["services"]["api"]["build"]["context"] == "."
-    assert compose["services"]["worker"]["build"]["context"] == "."
+    assert compose["services"]["api"]["image"] == "code-review-app:local"
+    assert compose["services"]["worker"]["image"] == "code-review-app:local"
+    assert "build" not in compose["services"]["worker"]
     assert compose["services"]["localstack"]["image"].startswith("localstack/localstack")
     assert compose["services"]["api"]["depends_on"]["localstack"]["condition"] == "service_healthy"
     assert compose["services"]["worker"]["depends_on"]["localstack"]["condition"] == "service_healthy"
