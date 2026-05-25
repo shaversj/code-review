@@ -78,7 +78,7 @@ class AnthropicReviewGateway:
             messages=[{"role": "user", "content": user_prompt}],
         )
         logger.info("parsing model review response model=%s", self.model)
-        payload = json.loads(self._first_text_block(message))
+        payload = self._parse_json_payload(self._first_text_block(message))
         result = ReviewPipelineResult(
             leads=[
                 Lead(
@@ -146,6 +146,49 @@ class AnthropicReviewGateway:
             if getattr(block, "type", None) == "text":
                 return str(block.text)
         raise ValueError("Anthropic response did not contain a text block")
+
+    @staticmethod
+    def _parse_json_payload(text: str) -> dict[str, Any]:
+        normalized = AnthropicReviewGateway._strip_markdown_fence(text)
+        try:
+            payload = json.loads(normalized)
+        except json.JSONDecodeError:
+            payload = AnthropicReviewGateway._parse_first_json_object(normalized)
+        if not isinstance(payload, dict):
+            raise ValueError("Anthropic response JSON payload must be an object")
+        return payload
+
+    @staticmethod
+    def _strip_markdown_fence(text: str) -> str:
+        stripped = text.strip()
+        if not stripped.startswith("```"):
+            return stripped
+
+        lines = stripped.splitlines()
+        if len(lines) >= 2 and lines[-1].strip() == "```":
+            return "\n".join(lines[1:-1]).strip()
+        return stripped
+
+    @staticmethod
+    def _parse_first_json_object(text: str) -> Any:
+        start = text.find("{")
+        if start == -1:
+            logger.warning(
+                "model review response did not contain a JSON object response_chars=%s",
+                len(text),
+            )
+            raise ValueError("Anthropic response did not contain a JSON object")
+
+        decoder = json.JSONDecoder()
+        try:
+            payload, _ = decoder.raw_decode(text[start:])
+        except json.JSONDecodeError:
+            logger.warning(
+                "model review response was not valid JSON response_chars=%s",
+                len(text),
+            )
+            raise
+        return payload
 
     @staticmethod
     def _usage_tokens(message: Any) -> tuple[int, int]:

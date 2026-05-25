@@ -106,6 +106,37 @@ def test_anthropic_gateway_logs_model_usage_and_estimated_cost(caplog) -> None:
     assert "estimated_cost_usd=0.000900" in caplog.text
 
 
+def test_anthropic_gateway_accepts_fenced_json_response() -> None:
+    client = FakeAnthropicClient(
+        """
+```json
+{
+  "leads": [],
+  "findings": [
+    {
+      "file_path": "app.py",
+      "line": 4,
+      "severity": "high",
+      "title": "Broken auth",
+      "behavior_at_risk": "Users can access private data.",
+      "evidence": "The diff bypasses the auth guard.",
+      "suggested_action": "Restore the guard before returning data.",
+      "confidence": 0.91
+    }
+  ]
+}
+```
+"""
+    )
+    gateway = AnthropicReviewGateway(client=client)
+
+    result = gateway.review(
+        Workspace(path=Path("."), base_sha="base", head_sha="head", diff="+bug"), []
+    )
+
+    assert result.findings[0].title == "Broken auth"
+
+
 def test_anthropic_pipeline_uses_gateway() -> None:
     class FakeGateway:
         def review(self, workspace, checks):

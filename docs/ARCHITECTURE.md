@@ -171,7 +171,7 @@ workspace diff + check results
   -> reporter
 ```
 
-The model gateway receives the diff and outputs review data only. It must not create or choose shell commands.
+The model gateway receives the diff and outputs review data only. It must not create or choose shell commands. The gateway expects JSON review data and tolerates common model formatting wrappers such as Markdown fenced JSON blocks before validating the payload shape.
 
 For operator visibility, the model gateway logs review start, response parsing, completion, provider-reported input/output token counts, and an estimated USD cost. Cost estimation uses configured per-million token prices and should be updated if provider pricing changes.
 

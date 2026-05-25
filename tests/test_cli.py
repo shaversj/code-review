@@ -52,6 +52,7 @@ def settings(tmp_path: Path) -> Settings:
         github_webhook_secret="secret",
         github_allowed_repos="owner/repo",
         sqs_queue_url="https://sqs.us-east-1.amazonaws.com/123/reviews",
+        review_pipeline_provider="deterministic",
     )
 
 
