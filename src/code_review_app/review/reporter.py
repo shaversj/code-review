@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Protocol
 
-from code_review_app.github.client import GitHubClientProtocol
+from code_review_app.github.client import GitHubClientProtocol, ReviewCommentPlacementError
 from code_review_app.review.models import Finding
+
+
+logger = logging.getLogger(__name__)
 
 
 class DuplicateStore(Protocol):
@@ -49,14 +53,25 @@ class GitHubReporter:
             if not self._is_inline_placeable(finding):
                 summary_findings.append(finding)
                 continue
-            posted_ids.append(
-                self.github_client.create_review_comment(
+            try:
+                posted_ids.append(
+                    self.github_client.create_review_comment(
+                        repo_full_name,
+                        pr_number,
+                        expected_head_sha,
+                        finding,
+                    )
+                )
+            except ReviewCommentPlacementError:
+                logger.info(
+                    "falling back to summary review after inline placement rejection "
+                    "repo=%s pr=%s path=%s line=%s",
                     repo_full_name,
                     pr_number,
-                    expected_head_sha,
-                    finding,
+                    finding.file_path,
+                    finding.line,
                 )
-            )
+                summary_findings.append(finding)
         if summary_findings:
             posted_ids.append(
                 self.github_client.create_pull_request_review(
@@ -92,7 +107,7 @@ class GitHubReporter:
 
     @staticmethod
     def _summary_body(findings: list[Finding]) -> str:
-        lines = ["Configured review checks found issues that could not be placed inline:"]
+        lines = ["Review findings could not be placed inline:"]
         for finding in findings:
             lines.extend(
                 [

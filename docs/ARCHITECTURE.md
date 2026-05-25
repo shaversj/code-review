@@ -186,6 +186,7 @@ Current behavior:
 - skip already-posted duplicate findings for the same repo, PR, head SHA, path, line, and title
 - post inline review comments through GitHub's pull request comments API
 - post issue summary comments when a finding cannot be placed inline
+- fall back to the summary review when GitHub rejects an inline comment location with validation errors
 
 Follow-up work should add diff-hunk-aware line placement and stale comment handling.
 

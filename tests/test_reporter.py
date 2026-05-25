@@ -1,10 +1,14 @@
+from code_review_app.github.client import ReviewCommentPlacementError
 from code_review_app.review.models import Finding
 from code_review_app.review.reporter import GitHubReporter
 
 
 class FakeGitHubClient:
-    def __init__(self, head_sha: str) -> None:
+    def __init__(
+        self, head_sha: str, rejected_inline_titles: set[str] | None = None
+    ) -> None:
         self.head_sha = head_sha
+        self.rejected_inline_titles = rejected_inline_titles or set()
         self.comments: list[dict] = []
         self.summary_comments: list[dict] = []
 
@@ -14,6 +18,8 @@ class FakeGitHubClient:
     def create_review_comment(
         self, repo_full_name: str, pr_number: int, head_sha: str, finding: Finding
     ) -> str:
+        if finding.title in self.rejected_inline_titles:
+            raise ReviewCommentPlacementError("validation failed")
         self.comments.append(
             {
                 "repo": repo_full_name,
@@ -22,7 +28,7 @@ class FakeGitHubClient:
                 "title": finding.title,
             }
         )
-        return "comment-1"
+        return f"comment-{len(self.comments)}"
 
     def create_pull_request_review(
         self, repo_full_name: str, pr_number: int, head_sha: str, body: str
@@ -67,6 +73,20 @@ def non_inline_finding(title: str) -> Finding:
     return type(item)(
         file_path=".",
         line=1,
+        severity=item.severity,
+        title=title,
+        behavior_at_risk=item.behavior_at_risk,
+        evidence=item.evidence,
+        suggested_action=item.suggested_action,
+        confidence=item.confidence,
+    )
+
+
+def inline_finding(title: str) -> Finding:
+    item = finding()
+    return type(item)(
+        file_path=item.file_path,
+        line=item.line,
         severity=item.severity,
         title=title,
         behavior_at_risk=item.behavior_at_risk,
@@ -135,3 +155,20 @@ def test_reporter_groups_multiple_non_inline_findings_into_one_summary() -> None
     body = client.summary_comments[0]["body"]
     assert "First issue" in body
     assert "Second issue" in body
+
+
+def test_reporter_falls_back_to_summary_when_github_rejects_inline_location() -> None:
+    client = FakeGitHubClient("head", rejected_inline_titles={"Rejected inline"})
+    reporter = GitHubReporter(client)
+
+    posted = reporter.post_findings(
+        "owner/repo",
+        5,
+        "head",
+        [inline_finding("Accepted inline"), inline_finding("Rejected inline")],
+    )
+
+    assert posted == ["comment-1", "summary-1"]
+    assert [comment["title"] for comment in client.comments] == ["Accepted inline"]
+    assert len(client.summary_comments) == 1
+    assert "Rejected inline" in client.summary_comments[0]["body"]

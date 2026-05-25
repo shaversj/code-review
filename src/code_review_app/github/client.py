@@ -7,6 +7,10 @@ import httpx
 from code_review_app.review.models import Finding
 
 
+class ReviewCommentPlacementError(Exception):
+    """Raised when GitHub rejects an inline PR review comment location."""
+
+
 class GitHubClientProtocol(Protocol):
     def get_pull_request_head_sha(self, repo_full_name: str, pr_number: int) -> str:
         raise NotImplementedError
@@ -71,7 +75,12 @@ class GitHubClient:
             },
             timeout=20,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 422:
+                raise ReviewCommentPlacementError("GitHub rejected inline comment placement") from exc
+            raise
         return str(response.json()["id"])
 
     def create_pull_request_review(
