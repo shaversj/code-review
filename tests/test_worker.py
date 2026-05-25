@@ -180,3 +180,4 @@ def test_worker_passes_diff_index_to_reporter(tmp_path: Path) -> None:
 
     assert reporter.inline_locations is not None
     assert reporter.inline_locations.has_right_line("app.py", 2)
+    assert reporter.inline_locations.has_added_line("app.py", 2)

@@ -189,7 +189,7 @@ def test_reporter_falls_back_to_summary_when_github_rejects_inline_location() ->
     assert "Rejected inline" in client.summary_comments[0]["body"]
 
 
-def test_reporter_only_posts_inline_when_location_is_in_diff() -> None:
+def test_reporter_only_posts_inline_when_location_is_added_in_diff() -> None:
     client = FakeGitHubClient("head")
     reporter = GitHubReporter(client)
     diff_index = DiffIndex.from_unified_diff(
@@ -206,10 +206,15 @@ def test_reporter_only_posts_inline_when_location_is_in_diff() -> None:
         "owner/repo",
         5,
         "head",
-        [inline_finding_at("Inline", 2), inline_finding_at("Summary", 20)],
+        [
+            inline_finding_at("Context line", 1),
+            inline_finding_at("Added line", 2),
+            inline_finding_at("Outside diff", 20),
+        ],
         inline_locations=diff_index,
     )
 
     assert posted == ["comment-1", "summary-1"]
-    assert [comment["title"] for comment in client.comments] == ["Inline"]
-    assert "Summary" in client.summary_comments[0]["body"]
+    assert [comment["title"] for comment in client.comments] == ["Added line"]
+    assert "Context line" in client.summary_comments[0]["body"]
+    assert "Outside diff" in client.summary_comments[0]["body"]

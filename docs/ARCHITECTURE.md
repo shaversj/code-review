@@ -85,7 +85,7 @@ The worker CLI receives SQS messages and calls `ReviewWorker.handle_job`:
 9. Persist check results.
 10. Pass workspace and check results to the selected review pipeline.
 11. Persist leads and findings.
-12. Build an index of right-side lines present in the pull request diff.
+12. Build an index of added and right-side lines present in the pull request diff.
 13. Post findings through the reporter.
 14. Persist posted comment IDs.
 15. Mark the review run `completed` or `failed`.
@@ -186,11 +186,11 @@ Current behavior:
 - skip stale head SHAs
 - skip findings below `0.75` confidence
 - skip already-posted duplicate findings for the same repo, PR, head SHA, path, line, and title
-- post inline review comments only when the finding path and line are present on the right side of the pull request diff
+- post inline review comments only when the finding path and line are present as added lines in the pull request diff
 - post issue summary comments when a finding cannot be placed inline from the local diff index
 - fall back to the summary review when GitHub rejects an inline comment location with validation errors
 
-Follow-up work should add nearest-line remapping for findings that point just outside a diff hunk and stale comment handling.
+Follow-up work should add nearest-added-line remapping for findings that point to nearby context lines and stale comment handling.
 
 ## Configuration
 

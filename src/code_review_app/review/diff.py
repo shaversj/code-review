@@ -12,10 +12,12 @@ HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 @dataclass(frozen=True)
 class DiffIndex:
     right_lines_by_path: Mapping[str, frozenset[int]]
+    added_lines_by_path: Mapping[str, frozenset[int]]
 
     @classmethod
     def from_unified_diff(cls, diff: str) -> "DiffIndex":
-        lines_by_path: dict[str, set[int]] = {}
+        right_lines_by_path: dict[str, set[int]] = {}
+        added_lines_by_path: dict[str, set[int]] = {}
         current_path: str | None = None
         right_line: int | None = None
 
@@ -29,7 +31,8 @@ class DiffIndex:
                 current_path = cls._normalize_path(line[4:])
                 right_line = None
                 if current_path != "/dev/null":
-                    lines_by_path.setdefault(current_path, set())
+                    right_lines_by_path.setdefault(current_path, set())
+                    added_lines_by_path.setdefault(current_path, set())
                 continue
 
             if line.startswith("@@ "):
@@ -48,29 +51,40 @@ class DiffIndex:
             if line.startswith("-"):
                 continue
             if line.startswith("+"):
-                lines_by_path.setdefault(current_path, set()).add(right_line)
+                right_lines_by_path.setdefault(current_path, set()).add(right_line)
+                added_lines_by_path.setdefault(current_path, set()).add(right_line)
                 right_line += 1
                 continue
 
-            lines_by_path.setdefault(current_path, set()).add(right_line)
+            right_lines_by_path.setdefault(current_path, set()).add(right_line)
             right_line += 1
 
         return cls(
             MappingProxyType(
-                {path: frozenset(lines) for path, lines in lines_by_path.items()}
-            )
+                {path: frozenset(lines) for path, lines in right_lines_by_path.items()}
+            ),
+            MappingProxyType(
+                {path: frozenset(lines) for path, lines in added_lines_by_path.items()}
+            ),
         )
 
     def has_right_line(self, path: str, line: int) -> bool:
         return line in self.right_lines_by_path.get(path, frozenset())
+
+    def has_added_line(self, path: str, line: int) -> bool:
+        return line in self.added_lines_by_path.get(path, frozenset())
 
     @property
     def file_count(self) -> int:
         return len(self.right_lines_by_path)
 
     @property
-    def line_count(self) -> int:
+    def right_line_count(self) -> int:
         return sum(len(lines) for lines in self.right_lines_by_path.values())
+
+    @property
+    def added_line_count(self) -> int:
+        return sum(len(lines) for lines in self.added_lines_by_path.values())
 
     @staticmethod
     def _normalize_path(raw_path: str) -> str:

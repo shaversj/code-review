@@ -22,6 +22,13 @@ def test_diff_index_tracks_right_side_added_and_context_lines() -> None:
     assert index.has_right_line("app.py", 4)
     assert index.has_right_line("app.py", 5)
     assert not index.has_right_line("app.py", 6)
+    assert not index.has_added_line("app.py", 1)
+    assert index.has_added_line("app.py", 2)
+    assert not index.has_added_line("app.py", 3)
+    assert index.has_added_line("app.py", 4)
+    assert not index.has_added_line("app.py", 5)
+    assert index.right_line_count == 5
+    assert index.added_line_count == 2
 
 
 def test_diff_index_uses_new_path_for_renamed_file() -> None:
@@ -42,6 +49,7 @@ rename to new.py
     assert index.has_right_line("new.py", 10)
     assert index.has_right_line("new.py", 11)
     assert index.has_right_line("new.py", 12)
+    assert index.has_added_line("new.py", 11)
     assert not index.has_right_line("old.py", 11)
 
 
@@ -63,3 +71,4 @@ diff --git a/two.py b/two.py
     assert index.has_right_line("one.py", 1)
     assert not index.has_right_line("one.py", 2)
     assert index.has_right_line("two.py", 5)
+    assert index.added_line_count == 2

@@ -111,7 +111,7 @@ class GitHubReporter:
             return False
         if inline_locations is None:
             return True
-        return inline_locations.has_right_line(finding.file_path, finding.line)
+        return inline_locations.has_added_line(finding.file_path, finding.line)
 
     @staticmethod
     def _summary_body(findings: list[Finding]) -> str:

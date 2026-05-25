@@ -81,9 +81,10 @@ class ReviewWorker:
             logger.info("posting review findings", extra={"review_run_id": review_run_id})
             inline_locations = DiffIndex.from_unified_diff(workspace.diff)
             logger.info(
-                "computed inline comment locations files=%s lines=%s",
+                "computed inline comment locations files=%s added_lines=%s right_side_lines=%s",
                 inline_locations.file_count,
-                inline_locations.line_count,
+                inline_locations.added_line_count,
+                inline_locations.right_line_count,
                 extra={"review_run_id": review_run_id},
             )
             posted_comment_ids = self.reporter.post_findings(
