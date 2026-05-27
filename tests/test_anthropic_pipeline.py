@@ -93,6 +93,30 @@ def test_anthropic_prompt_asks_for_fewer_high_confidence_findings() -> None:
     assert "Do not restate raw check failures" in SYSTEM_PROMPT
 
 
+def test_anthropic_prompt_uses_structured_review_contract() -> None:
+    for section in [
+        "## Mission",
+        "## Input",
+        "## Output",
+        "## Review Workflow",
+        "## Severity Rubric",
+        "## In Scope",
+        "## Out Of Scope",
+        "## Before Returning",
+    ]:
+        assert section in SYSTEM_PROMPT
+
+    assert "A lead is for discovery" in SYSTEM_PROMPT
+    assert "A finding is for a verified issue" in SYSTEM_PROMPT
+    assert "up to 12 diverse leads" in SYSTEM_PROMPT
+    assert "Use only these related_rule_ids" in SYSTEM_PROMPT
+    assert "SECURITY" in SYSTEM_PROMPT
+    assert "API_CONTRACT" in SYSTEM_PROMPT
+    assert "security/privacy/data-loss" in SYSTEM_PROMPT
+    assert "Redact secrets" in SYSTEM_PROMPT
+    assert "Return valid JSON only" in SYSTEM_PROMPT
+
+
 def test_anthropic_gateway_filters_and_caps_model_findings() -> None:
     findings = []
     for index in range(MAX_MODEL_FINDINGS + 2):

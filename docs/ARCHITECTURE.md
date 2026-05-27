@@ -171,7 +171,7 @@ Check output is persisted in SQLite. GitHub-facing findings show only the first 
 
 The default pipeline is deterministic. `DeterministicReviewPipeline` turns failed or timed-out configured checks into medium-severity findings.
 
-The optional model-backed path is selected with `REVIEW_PIPELINE_PROVIDER=anthropic-compatible`. `AnthropicReviewGateway` uses an Anthropic-compatible Messages API and asks for a JSON object containing leads and findings. The prompt asks for at most five findings, confidence `>= 0.80`, concrete changed-code evidence, and avoids restating raw check failures without a changed-line behavioral tie. The default compatible target is MiniMax:
+The optional model-backed path is selected with `REVIEW_PIPELINE_PROVIDER=anthropic-compatible`. `AnthropicReviewGateway` uses an Anthropic-compatible Messages API and asks for a JSON object containing leads and findings. The prompt uses structured sections for mission, input, output, review workflow, severity rubric, scope, safety, and final validation. It asks the model to use bounded fan-out for up to 12 diverse leads, then report at most five verified findings with confidence `>= 0.80`. Findings must cite changed-code or check evidence, avoid restating raw check failures without a changed-line behavioral tie, use normalized review categories, redact secrets, and skip style-only or formatting-only noise. The default compatible target is MiniMax:
 
 ```text
 workspace diff + check results
