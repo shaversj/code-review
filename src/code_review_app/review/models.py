@@ -43,6 +43,7 @@ class Finding:
     evidence: str
     suggested_action: str
     confidence: float
+    category: str = "correctness"
 
 
 @dataclass(frozen=True)

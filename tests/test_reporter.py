@@ -90,6 +90,21 @@ def non_inline_finding(title: str) -> Finding:
     )
 
 
+def non_inline_finding_with_category(title: str, category: str) -> Finding:
+    item = non_inline_finding(title)
+    return type(item)(
+        file_path=item.file_path,
+        line=item.line,
+        category=category,
+        severity=item.severity,
+        title=item.title,
+        behavior_at_risk=item.behavior_at_risk,
+        evidence=item.evidence,
+        suggested_action=item.suggested_action,
+        confidence=item.confidence,
+    )
+
+
 def inline_finding(title: str) -> Finding:
     item = finding()
     return type(item)(
@@ -189,6 +204,31 @@ def test_reporter_groups_multiple_non_inline_findings_into_one_summary() -> None
     body = client.summary_comments[0]["body"]
     assert "First issue" in body
     assert "Second issue" in body
+
+
+def test_reporter_groups_summary_findings_by_category() -> None:
+    client = FakeGitHubClient("head")
+    reporter = GitHubReporter(client)
+
+    reporter.post_findings(
+        "owner/repo",
+        5,
+        "head",
+        [
+            non_inline_finding_with_category("Auth issue", "security"),
+            non_inline_finding_with_category("Contract issue", "correctness"),
+            non_inline_finding_with_category("Slow query", "performance"),
+        ],
+    )
+
+    body = client.summary_comments[0]["body"]
+    assert "## Security" in body
+    assert "Auth issue" in body
+    assert "## Correctness" in body
+    assert "Contract issue" in body
+    assert "## Performance" in body
+    assert "Slow query" in body
+    assert "## Maintainability" not in body
 
 
 def test_reporter_falls_back_to_summary_when_github_rejects_inline_location() -> None:

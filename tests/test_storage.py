@@ -87,6 +87,7 @@ def test_storage_persists_review_artifacts_and_posted_comment_ids(tmp_path: Path
             Finding(
                 file_path="app.py",
                 line=4,
+                category="security",
                 severity="medium",
                 title="Issue",
                 behavior_at_risk="Risk",
@@ -102,6 +103,7 @@ def test_storage_persists_review_artifacts_and_posted_comment_ids(tmp_path: Path
     assert artifacts["check_runs"][0]["name"] == "unit"
     assert artifacts["leads"][0]["suspicion"] == "Unhandled error"
     assert artifacts["findings"][0]["id"] == finding_ids[0]
+    assert artifacts["findings"][0]["category"] == "security"
     assert artifacts["findings"][0]["posted_comment_id"] == "comment-1"
 
 
@@ -128,6 +130,45 @@ def test_storage_persists_model_usage(tmp_path: Path) -> None:
     assert artifacts["model_runs"][0]["input_tokens"] == 1000
     assert artifacts["model_runs"][0]["output_tokens"] == 500
     assert artifacts["model_runs"][0]["estimated_cost_usd"] == 0.0009
+
+
+def test_storage_initialize_adds_finding_category_to_existing_database(tmp_path: Path) -> None:
+    database_path = tmp_path / "review.db"
+    storage = Storage(database_path)
+    storage.initialize()
+
+    with storage.connect() as connection:
+        connection.execute("ALTER TABLE findings RENAME TO findings_old")
+        connection.execute(
+            """
+            CREATE TABLE findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                review_run_id INTEGER NOT NULL REFERENCES review_runs(id),
+                lead_id INTEGER REFERENCES leads(id),
+                file_path TEXT NOT NULL,
+                line INTEGER NOT NULL,
+                severity TEXT NOT NULL,
+                title TEXT NOT NULL,
+                behavior_at_risk TEXT NOT NULL,
+                evidence TEXT NOT NULL,
+                suggested_action TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                status TEXT NOT NULL,
+                posted_comment_id TEXT
+            )
+            """
+        )
+        connection.execute("DROP TABLE findings_old")
+
+    storage.initialize()
+
+    with storage.connect() as connection:
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(findings)").fetchall()
+        }
+
+    assert "category" in columns
 
 
 def test_storage_detects_existing_posted_finding(tmp_path: Path) -> None:

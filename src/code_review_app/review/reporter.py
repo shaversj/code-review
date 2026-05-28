@@ -10,6 +10,14 @@ from code_review_app.review.models import Finding
 
 logger = logging.getLogger(__name__)
 BOT_REVIEW_MARKER = "<!-- code-review-bot -->"
+CATEGORY_LABELS = {
+    "significant_concerns": "Significant Concerns",
+    "correctness": "Correctness",
+    "security": "Security",
+    "performance": "Performance",
+    "maintainability": "Maintainability",
+}
+CATEGORY_ORDER = tuple(CATEGORY_LABELS)
 
 
 class DuplicateStore(Protocol):
@@ -130,14 +138,32 @@ class GitHubReporter:
     @staticmethod
     def _summary_body(findings: list[Finding]) -> str:
         lines = [BOT_REVIEW_MARKER, "", "Review findings could not be placed inline:"]
-        for finding in findings:
-            lines.extend(
-                [
-                    "",
-                    f"- **{finding.severity.upper()}: {finding.title}**",
-                    f"  - Risk: {finding.behavior_at_risk}",
-                    f"  - Evidence: {finding.evidence}",
-                    f"  - Suggested action: {finding.suggested_action}",
-                ]
-            )
+        for category, grouped_findings in GitHubReporter._group_findings_by_category(
+            findings
+        ).items():
+            lines.extend(["", f"## {CATEGORY_LABELS[category]}"])
+            for finding in grouped_findings:
+                lines.extend(
+                    [
+                        "",
+                        f"- **{finding.severity.upper()}: {finding.title}**",
+                        f"  - Risk: {finding.behavior_at_risk}",
+                        f"  - Evidence: {finding.evidence}",
+                        f"  - Suggested action: {finding.suggested_action}",
+                    ]
+                )
         return "\n".join(lines)
+
+    @staticmethod
+    def _group_findings_by_category(findings: list[Finding]) -> dict[str, list[Finding]]:
+        grouped: dict[str, list[Finding]] = {}
+        for category in CATEGORY_ORDER:
+            matching = [finding for finding in findings if finding.category == category]
+            if matching:
+                grouped[category] = matching
+        uncategorized = [
+            finding for finding in findings if finding.category not in CATEGORY_LABELS
+        ]
+        if uncategorized:
+            grouped.setdefault("correctness", []).extend(uncategorized)
+        return grouped
