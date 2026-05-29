@@ -32,7 +32,7 @@ def test_create_review_comment_wraps_placement_validation_failure(monkeypatch) -
         GitHubClient("token").create_review_comment("owner/repo", 5, "head", finding())
 
 
-def test_create_review_comment_includes_category_in_inline_body(monkeypatch) -> None:
+def test_create_review_comment_renders_category_as_inline_section(monkeypatch) -> None:
     captured_payload = {}
 
     def fake_post(*args, **kwargs):
@@ -63,7 +63,7 @@ def test_create_review_comment_includes_category_in_inline_body(monkeypatch) -> 
     )
 
     assert comment_id == "123"
-    assert captured_payload["body"].startswith("**Security / HIGH: Issue**")
+    assert captured_payload["body"].startswith("## Security\n\n**HIGH: Issue**")
 
 
 def test_has_existing_bot_review_detects_marker_for_head(monkeypatch) -> None:

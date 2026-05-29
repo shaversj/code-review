@@ -66,7 +66,8 @@ class GitHubClient:
     ) -> str:
         label = category_label(finding.category)
         body = (
-            f"**{label} / {finding.severity.upper()}: {finding.title}**\n\n"
+            f"## {label}\n\n"
+            f"**{finding.severity.upper()}: {finding.title}**\n\n"
             f"{finding.behavior_at_risk}\n\n"
             f"Evidence: {finding.evidence}\n\n"
             f"Suggested action: {finding.suggested_action}"

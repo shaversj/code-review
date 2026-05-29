@@ -188,7 +188,7 @@ For operator visibility, the model gateway logs review start, response parsing, 
 ## Reporter Guardrails
 
 `GitHubReporter` verifies the current pull request head SHA before posting comments. If the PR head changed, it posts nothing.
-Summary reviews include a hidden `<!-- code-review-bot -->` marker. If a marked bot review already exists for the same PR head SHA, the reporter skips posting another review for that head to reduce repeated-test noise. Inline comments include the finding category in their title, findings that cannot be placed inline are grouped by category in the summary review, and empty categories are hidden.
+Summary reviews include a hidden `<!-- code-review-bot -->` marker. If a marked bot review already exists for the same PR head SHA, the reporter skips posting another review for that head to reduce repeated-test noise. Inline comments render the finding category as a small section heading, findings that cannot be placed inline are grouped by category in the summary review, and empty categories are hidden.
 
 Current behavior:
 
