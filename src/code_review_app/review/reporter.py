@@ -4,20 +4,13 @@ import logging
 from typing import Protocol
 
 from code_review_app.github.client import GitHubClientProtocol, ReviewCommentPlacementError
+from code_review_app.review.categories import CATEGORY_LABELS, CATEGORY_ORDER
 from code_review_app.review.diff import DiffIndex
 from code_review_app.review.models import Finding
 
 
 logger = logging.getLogger(__name__)
 BOT_REVIEW_MARKER = "<!-- code-review-bot -->"
-CATEGORY_LABELS = {
-    "significant_concerns": "Significant Concerns",
-    "correctness": "Correctness",
-    "security": "Security",
-    "performance": "Performance",
-    "maintainability": "Maintainability",
-}
-CATEGORY_ORDER = tuple(CATEGORY_LABELS)
 
 
 class DuplicateStore(Protocol):
