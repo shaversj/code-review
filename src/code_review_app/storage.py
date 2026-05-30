@@ -73,6 +73,7 @@ class Storage:
                     lead_id INTEGER REFERENCES leads(id),
                     file_path TEXT NOT NULL,
                     line INTEGER NOT NULL,
+                    category TEXT NOT NULL DEFAULT 'correctness',
                     severity TEXT NOT NULL,
                     title TEXT NOT NULL,
                     behavior_at_risk TEXT NOT NULL,
@@ -94,8 +95,25 @@ class Storage:
                     estimated_cost_usd REAL NOT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+
                 """
             )
+        self._ensure_findings_category_column()
+
+    def _ensure_findings_category_column(self) -> None:
+        # SQLite has no IF NOT EXISTS for ADD COLUMN on older versions.
+        # The migration is idempotent because initialize() may run on every process start.
+        try:
+            with self.connect() as connection:
+                connection.execute(
+                    """
+                    ALTER TABLE findings
+                    ADD COLUMN category TEXT NOT NULL DEFAULT 'correctness'
+                    """
+                )
+        except sqlite3.OperationalError as error:
+            if "duplicate column name" not in str(error).lower():
+                raise
 
     def create_review_run(
         self,
@@ -260,16 +278,17 @@ class Storage:
                 cursor = connection.execute(
                     """
                     INSERT INTO findings (
-                        review_run_id, file_path, line, severity, title,
+                        review_run_id, file_path, line, category, severity, title,
                         behavior_at_risk, evidence, suggested_action,
                         confidence, status
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
                     """,
                     (
                         review_run_id,
                         finding.file_path,
                         finding.line,
+                        finding.category,
                         finding.severity,
                         finding.title,
                         finding.behavior_at_risk,

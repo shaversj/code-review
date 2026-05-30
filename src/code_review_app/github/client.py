@@ -4,6 +4,7 @@ from typing import Protocol
 
 import httpx
 
+from code_review_app.review.categories import category_label
 from code_review_app.review.models import Finding
 
 
@@ -63,7 +64,9 @@ class GitHubClient:
         head_sha: str,
         finding: Finding,
     ) -> str:
+        label = category_label(finding.category)
         body = (
+            f"## {label}\n\n"
             f"**{finding.severity.upper()}: {finding.title}**\n\n"
             f"{finding.behavior_at_risk}\n\n"
             f"Evidence: {finding.evidence}\n\n"

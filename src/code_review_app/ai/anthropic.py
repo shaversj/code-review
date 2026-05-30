@@ -17,6 +17,31 @@ from code_review_app.review.models import (
 logger = logging.getLogger(__name__)
 MAX_MODEL_FINDINGS = 5
 MIN_MODEL_CONFIDENCE = 0.8
+ALLOWED_CATEGORIES = {
+    "significant_concerns",
+    "correctness",
+    "security",
+    "performance",
+    "maintainability",
+}
+CATEGORY_ALIASES = {
+    "api": "correctness",
+    "api_contract": "correctness",
+    "api contract": "correctness",
+    "architecture": "maintainability",
+    "code_quality": "maintainability",
+    "code quality": "maintainability",
+    "data_loss": "significant_concerns",
+    "data loss": "significant_concerns",
+    "docs": "maintainability",
+    "documentation": "maintainability",
+    "error_handling": "correctness",
+    "error handling": "correctness",
+    "privacy": "security",
+    "tests": "correctness",
+    "test_coverage": "correctness",
+    "test coverage": "correctness",
+}
 DEFAULT_SUGGESTED_CONTEXT = "No suggested context provided by model."
 DEFAULT_BEHAVIOR_AT_RISK = "The model did not provide behavior-at-risk details."
 DEFAULT_SUGGESTED_ACTION = "Inspect the cited code and update if needed."
@@ -50,6 +75,7 @@ Return only JSON with this exact shape:
     {
       "file_path": "path",
       "line": 1,
+      "category": "significant_concerns|correctness|security|performance|maintainability",
       "severity": "low|medium|high",
       "title": "concise issue title",
       "behavior_at_risk": "user-visible risk",
@@ -79,6 +105,19 @@ line or behavior.
 - medium: user-visible behavior regression, incorrect state, error handling regression,
   or non-blocking contract mismatch
 - low: minor issue with concrete user impact; omit style-only or formatting-only items
+
+## Categories
+Use exactly one category per finding:
+- significant_concerns: merge-blocking or release-risk issues such as broken builds,
+  production crashes, data loss, severe security/privacy risk, or deployment blockers
+- correctness: runtime behavior bugs, API/type contracts, tests, error handling, state,
+  and data-flow regressions
+- security: auth, authorization, secrets, privacy leaks, unsafe input handling, and
+  exploitable behavior
+- performance: measurable latency, memory, I/O, rendering, query, or algorithmic
+  regressions
+- maintainability: architecture, code quality, documentation, and future-change risk
+Use significant_concerns only for merge-blocking or serious release-risk findings.
 
 ## In Scope
 Prioritize correctness, security, data loss, privacy, API contract, error handling,
@@ -203,6 +242,7 @@ class AnthropicReviewGateway:
                 Finding(
                     file_path=cls._string_field(item, "file_path", "."),
                     line=cls._int_field(item, "line", 1),
+                    category=cls._category_field(item),
                     severity=cls._severity_field(item),
                     title=cls._string_field(item, "title", "Model review finding"),
                     behavior_at_risk=cls._string_field(
@@ -301,6 +341,15 @@ class AnthropicReviewGateway:
         if severity not in {"low", "medium", "high"}:
             return "medium"
         return severity
+
+    @classmethod
+    def _category_field(cls, item: dict[str, Any]) -> str:
+        category = cls._string_field(item, "category", "correctness").lower()
+        category = category.strip().replace("-", "_")
+        category = CATEGORY_ALIASES.get(category, category)
+        if category not in ALLOWED_CATEGORIES:
+            return "correctness"
+        return category
 
     @staticmethod
     def _confidence_field(item: dict[str, Any]) -> float:

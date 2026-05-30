@@ -171,7 +171,7 @@ Check output is persisted in SQLite. GitHub-facing findings show only the first 
 
 The default pipeline is deterministic. `DeterministicReviewPipeline` turns failed or timed-out configured checks into medium-severity findings.
 
-The optional model-backed path is selected with `REVIEW_PIPELINE_PROVIDER=anthropic-compatible`. `AnthropicReviewGateway` uses an Anthropic-compatible Messages API and asks for a JSON object containing leads and findings. The prompt uses structured sections for mission, input, output, review workflow, severity rubric, scope, safety, and final validation. It asks the model to use bounded fan-out for up to 12 diverse leads, then report at most five verified findings with confidence `>= 0.80`. Findings must cite changed-code or check evidence, avoid restating raw check failures without a changed-line behavioral tie, use normalized review categories, redact secrets, and skip style-only or formatting-only noise. The default compatible target is MiniMax:
+The optional model-backed path is selected with `REVIEW_PIPELINE_PROVIDER=anthropic-compatible`. `AnthropicReviewGateway` uses an Anthropic-compatible Messages API and asks for a JSON object containing leads and findings. The prompt uses structured sections for mission, input, output, review workflow, severity rubric, scope, safety, and final validation. It asks the model to use bounded fan-out for up to 12 diverse leads, then report at most five verified findings with confidence `>= 0.80`. Findings must cite changed-code or check evidence, avoid restating raw check failures without a changed-line behavioral tie, use normalized review categories, redact secrets, and skip style-only or formatting-only noise. The allowed finding categories are `significant_concerns`, `correctness`, `security`, `performance`, and `maintainability`; parser aliases normalize older or more specific categories such as `api_contract`, `privacy`, and `code_quality` into those top-level buckets. The default compatible target is MiniMax:
 
 ```text
 workspace diff + check results
@@ -181,14 +181,14 @@ workspace diff + check results
   -> reporter
 ```
 
-The model gateway receives the diff and outputs review data only. It must not create or choose shell commands. The gateway expects JSON review data, tolerates common model formatting wrappers such as Markdown fenced JSON blocks, and normalizes partial lead/finding items so missing narrative fields do not crash the worker.
+The model gateway receives the diff and outputs review data only. It must not create or choose shell commands. The gateway expects JSON review data, tolerates common model formatting wrappers such as Markdown fenced JSON blocks, and normalizes partial lead/finding items so missing narrative fields do not crash the worker. Findings without a valid category default to `correctness`.
 
 For operator visibility, the model gateway logs review start, response parsing, completion, provider-reported input/output token counts, and an estimated USD cost. It also returns model usage data for persistence in `model_runs`. Cost estimation uses configured per-million token prices and should be updated if provider pricing changes.
 
 ## Reporter Guardrails
 
 `GitHubReporter` verifies the current pull request head SHA before posting comments. If the PR head changed, it posts nothing.
-Summary reviews include a hidden `<!-- code-review-bot -->` marker. If a marked bot review already exists for the same PR head SHA, the reporter skips posting another review for that head to reduce repeated-test noise.
+Summary reviews include a hidden `<!-- code-review-bot -->` marker. If a marked bot review already exists for the same PR head SHA, the reporter skips posting another review for that head to reduce repeated-test noise. Inline comments render the finding category as a small section heading, findings that cannot be placed inline are grouped by category in the summary review, and empty categories are hidden.
 
 Current behavior:
 

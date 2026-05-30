@@ -117,6 +117,66 @@ def test_anthropic_prompt_uses_structured_review_contract() -> None:
     assert "Return valid JSON only" in SYSTEM_PROMPT
 
 
+def test_anthropic_prompt_requires_review_categories() -> None:
+    assert '"category": "significant_concerns|correctness|security|performance|maintainability"' in SYSTEM_PROMPT
+    assert "Use significant_concerns only for merge-blocking" in SYSTEM_PROMPT
+
+
+def test_anthropic_gateway_parses_and_normalizes_finding_category() -> None:
+    client = FakeAnthropicClient(
+        json.dumps(
+            {
+                "leads": [],
+                "findings": [
+                    {
+                        "file_path": "app.py",
+                        "line": 3,
+                        "category": "API_CONTRACT",
+                        "severity": "high",
+                        "title": "Contract changed",
+                        "behavior_at_risk": "Callers can break.",
+                        "evidence": "The response shape changed.",
+                        "suggested_action": "Update callers or preserve compatibility.",
+                        "confidence": 0.91,
+                    },
+                    {
+                        "file_path": "auth.py",
+                        "line": 4,
+                        "category": "privacy",
+                        "severity": "high",
+                        "title": "Private data exposed",
+                        "behavior_at_risk": "Private user data can leak.",
+                        "evidence": "The auth guard was removed.",
+                        "suggested_action": "Restore the guard.",
+                        "confidence": 0.92,
+                    },
+                    {
+                        "file_path": "style.py",
+                        "line": 5,
+                        "category": "made_up",
+                        "severity": "medium",
+                        "title": "Unknown category",
+                        "behavior_at_risk": "Behavior can regress.",
+                        "evidence": "The model returned an unknown category.",
+                        "suggested_action": "Use the default category.",
+                        "confidence": 0.93,
+                    },
+                ],
+            }
+        )
+    )
+
+    result = AnthropicReviewGateway(client=client).review(
+        Workspace(path=Path("."), base_sha="base", head_sha="head", diff="+bug"), []
+    )
+
+    assert [finding.category for finding in result.findings] == [
+        "correctness",
+        "security",
+        "correctness",
+    ]
+
+
 def test_anthropic_gateway_filters_and_caps_model_findings() -> None:
     findings = []
     for index in range(MAX_MODEL_FINDINGS + 2):
