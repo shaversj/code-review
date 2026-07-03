@@ -2,6 +2,7 @@
 name = "code-review-app"
 version = "0.1.0"
 description = "Single-tenant GitHub App for AI-assisted PR review"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
   "anthropic>=0.74",

@@ -1,10 +1,67 @@
 # AI Code Reviewer
 
-Single-tenant GitHub App service for automated pull request review.
+[![CI](https://github.com/shaversj/code-review/actions/workflows/ci.yml/badge.svg)](https://github.com/shaversj/code-review/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-webhook-green)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Docker Compose Setup
+A single-tenant GitHub App service for automated pull request review.
 
-Store your GitHub App private key in the ignored local `.secrets` directory before starting the stack:
+The project demonstrates a production-shaped review service: FastAPI webhook ingestion, GitHub App authentication, queued review jobs, sandboxed checkout, deterministic checks, optional model-backed review, SQLite run history, and GitHub review publishing.
+
+## Try It
+
+```bash
+uv sync --extra dev
+uv run pytest -q
+uv run ruff check .
+```
+
+Or run the full local verification script:
+
+```bash
+./init.sh
+```
+
+## What To Notice
+
+- Webhook ingestion is separated from review execution.
+- Review jobs move through a queue rather than running directly inside the webhook request.
+- The deterministic pipeline can run without an AI provider.
+- The model-backed path is isolated behind an Anthropic-compatible adapter.
+- Review runs, checks, findings, leads, and token usage are persisted for inspection.
+- Failed configured checks become review findings instead of crashing the worker.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A["GitHub webhook"] --> B["FastAPI API"]
+    B --> C["SQS-compatible queue"]
+    C --> D["Worker"]
+    D --> E["Sandbox checkout"]
+    E --> F["Configured checks"]
+    F --> G["Deterministic findings"]
+    E --> H["Optional model review"]
+    H --> I["Normalized findings"]
+    G --> J["SQLite review run"]
+    I --> J
+    J --> K["GitHub review comments"]
+```
+
+## What To Review
+
+- [src/code_review_app/main.py](src/code_review_app/main.py): FastAPI application factory and routes.
+- [src/code_review_app/github/webhook.py](src/code_review_app/github/webhook.py): webhook parsing and event handling.
+- [src/code_review_app/queue/sqs.py](src/code_review_app/queue/sqs.py): queue integration.
+- [src/code_review_app/review/worker.py](src/code_review_app/review/worker.py): review job execution loop.
+- [src/code_review_app/review/pipeline.py](src/code_review_app/review/pipeline.py): deterministic and model-backed review pipeline.
+- [src/code_review_app/sandbox/checks.py](src/code_review_app/sandbox/checks.py): configured check execution.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): deeper architecture notes.
+
+## Docker Compose Demo
+
+Store your GitHub App private key in the ignored local `.secrets` directory:
 
 ```bash
 mkdir -p .secrets
@@ -12,12 +69,7 @@ cp /path/to/downloaded-private-key.pem .secrets/github-app-private-key.pem
 chmod 600 .secrets/github-app-private-key.pem
 ```
 
-The `.secrets/` directory and `*.pem` files are intentionally ignored by git. The PEM can live inside the working directory for Docker Compose convenience, but it must never be staged or committed. You can confirm it is ignored with:
-
-```bash
-git check-ignore -v .secrets/github-app-private-key.pem
-git status --short
-```
+Start the local stack:
 
 ```bash
 docker compose up --build
@@ -29,59 +81,42 @@ This starts:
 - `worker`: local review job worker
 - `localstack`: local SQS emulator on `http://localhost:4566`
 
-The app image includes Python, git, Node.js 24, and npm so the worker can run configured checks for Python and modern Node repositories. If a configured command is missing, the worker records it as a failed check instead of crashing.
-
-GitHub comments include a short check-output summary; full check output is kept in SQLite for local inspection.
-
-LocalStack creates the `code-review-jobs` queue automatically from `localstack/init/ready.d/create-sqs.sh`.
-
-The Compose file pins LocalStack to `localstack/localstack:4.11.1` and sets `ACTIVATE_PRO=0`. LocalStack's 2026 `latest` image requires a `LOCALSTACK_AUTH_TOKEN`, while this project only needs local SQS emulation.
-
 Check the API:
 
 ```bash
 curl http://localhost:8000/healthz
 ```
 
-Inspect a completed review run, including checks, findings, leads, and model usage:
+Inspect a completed review run:
 
 ```bash
 curl http://localhost:8000/review-runs/1
 ```
 
-Check the LocalStack queue:
+## Direct Local Setup
 
 ```bash
-aws --endpoint-url=http://localhost:4566 sqs get-queue-url \
-  --queue-name code-review-jobs \
-  --query QueueUrl \
-  --output text
+uv sync --extra dev
+cp .env.example .env
 ```
 
-LocalStack also creates a `code-review-jobs-dlq` queue and attaches it to `code-review-jobs` with `maxReceiveCount=5`. Messages that fail repeatedly are redriven there by SQS-compatible queue policy.
+Fill in `.env` with GitHub App and SQS settings. For direct local runs, set `GITHUB_PRIVATE_KEY_PATH` to a host-visible path such as `./.secrets/github-app-private-key.pem`.
 
-View the local SQLite database in a browser after the Docker Compose stack has created the `code-review_app-data` volume:
+Run the API:
 
 ```bash
-docker run --rm -it \
-  --network code-review_default \
-  -p 8082:8080 \
-  -v code-review_app-data:/data \
-  coleifer/sqlite-web \
-  sqlite_web --host 0.0.0.0 /data/code-review.db
+uv run uvicorn code_review_app.main:create_app --factory --reload
 ```
 
-Then open `http://localhost:8082`.
-
-Override local defaults by exporting environment variables before `docker compose up`:
+Run the worker:
 
 ```bash
-GITHUB_APP_ID=123456
-GITHUB_WEBHOOK_SECRET=devsecret
-GITHUB_ALLOWED_REPOS=owner/repo
+uv run code-review-worker
 ```
 
-The default review pipeline is deterministic and only turns failed configured checks into findings. To use MiniMax through its Anthropic-compatible API, set:
+## Model-Backed Review
+
+The default review pipeline is deterministic. To use MiniMax through its Anthropic-compatible API, set:
 
 ```bash
 REVIEW_PIPELINE_PROVIDER=anthropic-compatible
@@ -93,43 +128,7 @@ MODEL_INPUT_PRICE_PER_MILLION_TOKENS=0.30
 MODEL_OUTPUT_PRICE_PER_MILLION_TOKENS=1.20
 ```
 
-The worker logs each model-backed review start and completion, including provider-reported input/output token counts and an estimated USD cost. It also stores the same usage record in SQLite for each review run. Model findings are categorized as `significant_concerns`, `correctness`, `security`, `performance`, or `maintainability`; inline comments render the category as a small section heading and summary reviews group non-inline findings by category. The estimate uses the per-million token prices above, so update them if your provider pricing changes.
-
-If the worker logs `selected review pipeline provider=deterministic`, the AI gateway is disabled for that run and no model/token logs will appear. Set `REVIEW_PIPELINE_PROVIDER=anthropic-compatible` and restart the worker to enable the model-backed path.
-
-The worker marks queued or running review runs older than `STALE_RUN_AFTER_MINUTES` as failed stale runs during startup. Set `STALE_RUN_AFTER_MINUTES=0` only for local cleanup.
-
-## Direct Local Setup
-
-Use this path if you want to run without Docker Compose.
-
-```bash
-uv sync --extra dev
-cp .env.example .env
-```
-
-Fill in `.env` with GitHub App and SQS settings.
-
-For direct local runs, set `GITHUB_PRIVATE_KEY_PATH` to a host-visible path such as `./.secrets/github-app-private-key.pem`. For Docker Compose, use the container-visible `/run/secrets/...` path.
-
-### Run API
-
-```bash
-uv run uvicorn code_review_app.main:create_app --factory --reload
-```
-
-### Run Worker
-
-```bash
-uv run code-review-worker
-```
-
-## Test
-
-```bash
-./init.sh
-uv run pytest -q
-```
+The worker logs provider-reported input/output token counts and stores usage records with each review run.
 
 ## Review Config
 
@@ -143,3 +142,10 @@ review:
         command: uv run pytest
         timeout_seconds: 300
 ```
+
+## Security Notes
+
+- `.secrets/` and `*.pem` files are ignored by git.
+- GitHub private keys should never be staged or committed.
+- The deterministic path is useful for local development before enabling model-backed review.
+- The app is intentionally single-tenant; keep allowed repository scope narrow.
